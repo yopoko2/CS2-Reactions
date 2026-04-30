@@ -6,19 +6,17 @@ to do that. So I built one. Windows only. Fully VAC-safe.
 
 ## Install
 
-Grab the latest installer from the releases page and run it. Windows Defender 
-will likely flag it during setup — this is a false positive. The app uses a 
-low-level keyboard hook for the global mute hotkey, which antivirus software 
-tends to be suspicious of. You can check the source code if you want to verify.
+Grab the latest installer from the releases page and run it. Windows Defender may 
+flag it as a false positive caused by the global hotkey hook. Source code is 
+available if you want to verify.
 
-Once installed, open CS2 then CS2 Reactions. The app will find your Steam folder 
-and write the GSI config automatically. If it can't find Steam you can point it 
-to the right folder manually. If sounds aren't triggering after that, try 
-relaunching CS2.
+Once installed, open CS2 then CS2 Reactions. Click "Link to CS2" to set up the 
+GSI config. If it fails, use "Browse folders" to locate your CS2 cfg folder 
+manually. If sounds aren't triggering, try relaunching CS2.
 
 ## Features
 
-- Custom sounds per event (headshot, kill, bomb plant, round end, match end)
+- Custom sounds per event (headshot, kill, bomb plant, round end, match end, etc.)
 - Per-weapon sound triggers, covers most CS2 weapons
 - Random or sequential playback (killstreak mode) so the same sound doesn't 
   loop forever
@@ -26,32 +24,18 @@ relaunching CS2.
 - Modifiable global mute hotkey
 - Runs in the system tray, autostart optional
 - Utility and fun settings (auto-trimming silence, pitch variation, etc.)
-- Available in English, Russian, Portuguese, French, and Chinese — auto-detected 
+- Available in English, Russian, Portuguese, French, and Chinese, auto-detected 
   from your system language
 
 ## Tips
 
-**Adding sounds**
-Drag and drop audio files directly onto event cards in the app. You can also 
-drag and drop .CSreact profile files anywhere on the app window to import them.
-
-**Profiles**
-Profiles are .CSreact files — they contain your config and sound files packaged 
-together. To create one, click export profile in the app. You can then send it 
-to anyone and they can drop it straight into the app to load it.
-
-**Sound ordering**
-If an event card has multiple sounds and killstreak mode is on, they play in 
-alphabetical order. To control the sequence just prefix your filenames with 
-numbers — "1_sound.mp3", "2_sound.mp3", etc.
-
-**First kill**
-The first kill of a match won't trigger a sound. This is a GSI limitation and 
-not something fixable without breaking the VAC-safe approach.
-
-**Mute While Dead**
-The Mute While Dead toggle can occasionally malfunction due to how GSI reports 
-player state. There's no clean fix for this right now.
+| | |
+|---|---|
+| **Adding sounds** | Click "Add sound" on any event card, or drag and drop audio files directly onto them. You can also drag and drop .CSreact profile files anywhere on the app to import them. |
+| **Profiles** | .CSreact files that contain your config and sounds packaged together. Click export profile in the app to create one, then send it to anyone to load. |
+| **Sound ordering** | Multiple sounds on a card play in alphabetical order. Prefix filenames with numbers like "1_sound.mp3" to control the sequence. |
+| **First kill** | The first kill of a match won't trigger a sound. GSI limitation, nothing fixable without breaking the VAC-safe approach. |
+| **Mute While Dead** | Can occasionally malfunction due to how GSI reports player state. No clean fix for this right now. |
 
 ## How it works
 
@@ -71,7 +55,7 @@ beyond writing the GSI config into the cfg folder.
 ## Limitations
 
 - Latency floor around 16ms tied to the engine tick rate
-- The GSI server runs on a fixed port — if something else on your machine is 
+- The GSI server runs on a fixed port, if something else on your machine is 
   using it the server won't start
 - Stacking a lot of sounds at once may cause clipping
 
@@ -79,10 +63,12 @@ beyond writing the GSI config into the cfg folder.
 
 Requires Rust (stable), Node.js 18+, Tauri CLI.
 
-git clone https://github.com/YOUR_USERNAME/cs2-reactions
-cd cs2-reactions
+```bash
+git clone https://github.com/yopoko2/CS2-Reactions
+cd CS2-Reactions
 npm install
 npm run tauri build
+```
 
 ## License
 
