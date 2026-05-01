@@ -16,7 +16,7 @@ to do that. So I built it!
 
 ## Install
 
-Grab the latest installer from the releases page and run it. Windows Defender may
+Grab the latest installer from the [releases](https://github.com/yopoko2/CS2-Reactions/releases/latest) page and run it. Windows Defender may
 flag it as a false positive caused by the global hotkey hook. Source code is
 available if you want to verify.
 
