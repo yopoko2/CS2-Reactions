@@ -1,0 +1,8 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1024" height="1024" fill="black"/>
+  <!-- The Tactical Bolt -->
+  <path d="M580 100 L300 580 H480 L420 924 L724 420 H524 L580 100 Z" fill="white"/>
+  <!-- The Audio Heartbeat (Knockout) -->
+  <rect x="0" y="495" width="1024" height="45" fill="black"/>
+  <path d="M50 517 H415 L445 440 L475 620 L505 400 L535 600 L565 517 H974" stroke="white" stroke-width="24" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

@@ -1,0 +1,6 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1024" height="1024" fill="#111111"/>
+  <path d="M512 100 L350 550 L512 550 L450 850 L650 400 L480 400 Z" fill="white"/>
+  <path d="M0 512 L400 512 L440 450 L480 580 L520 400 L560 512 L1024 512" stroke="white" stroke-width="15" fill="none" stroke-linejoin="round"/>
+  <text x="512" y="950" font-family="Arial, sans-serif" font-weight="bold" font-size="90" fill="white" text-anchor="middle">CS2 REACTIONS</text>
+</svg>

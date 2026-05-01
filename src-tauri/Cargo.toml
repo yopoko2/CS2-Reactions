@@ -1,0 +1,42 @@
+[package]
+name = "cs2-reactions"
+version = "4.2.2"
+description = "Immersive audio triggers for CS2"
+authors = ["Jesus"]
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+# The `_lib` suffix may seem redundant but it is necessary
+# to make the lib name unique and wouldn't conflict with the bin name.
+# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
+name = "tauri_app_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["protocol-asset", "tray-icon"] }
+tauri-plugin-opener = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tiny_http = "0.12"
+zip = "2.1"
+directories = "6.0"
+winreg = "0.52"
+tauri-plugin-global-shortcut = "2"
+tauri-plugin-fs = "2"
+tauri-plugin-shell = "2"
+tauri-plugin-notification = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-positioner = { version = "2", features = ["tray-icon"] }
+sysinfo = "0.33"
+sha2 = "0.11.0"
+hex = "0.4.3"
+tempfile = "3.27.0"
+chrono = "0.4.44"
+symphonia = { version = "0.5", features = ["mp3", "wav", "vorbis", "pcm"] }
+hound = "3.5"
+
