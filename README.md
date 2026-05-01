@@ -4,9 +4,7 @@
 
 # CS2 Reactions
 
-A small tool I built because I always wanted custom sounds playing on kills in
-competitive and killstreak audio in deathmatch, and there was never a simple way
-to do that. So I built it!
+A small tool I built because I always wanted custom SFX on kills in competitive and proper killstreak sounds in deathmatch, and there just wasn’t a simple way to do it. So I ended up making it myself.
 
 ## Preview
 
