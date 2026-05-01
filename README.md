@@ -8,6 +8,12 @@ A small tool I built because I always wanted custom sounds playing on kills in
 competitive and killstreak audio in deathmatch, and there was never a simple way
 to do that. So I built it!
 
+## Preview
+
+<p align="center">
+  <img src="public/AppShowcase.png" alt="CS2 Reactions App Preview" />
+</p>
+
 ## Install
 
 Grab the latest installer from the releases page and run it. Windows Defender may
