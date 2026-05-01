@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="public/logo.png" width="150"/>
+</p>
+
 # CS2 Reactions
 
 A small tool I built because I always wanted custom sounds playing on kills in
@@ -18,7 +22,7 @@ folder manually. If sounds aren't triggering, try relaunching CS2.
 
 - Custom sounds per event (headshot, kill, bomb plant, round end, match end, etc.)
 - Per-weapon sound triggers, covers most CS2 weapons
-- Random or sequential playback — sequential mode is labeled "Killstreak" and
+- Random or sequential playback, sequential mode is labeled "Killstreak" and
   plays sounds in order as your streak grows, resetting on death
 - Sound profile system (.CSreact) for importing and exporting profiles
 - Modifiable global mute hotkey
