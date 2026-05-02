@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# Cursor (local agent rules / logs — not for the public repo)
+.cursor/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
