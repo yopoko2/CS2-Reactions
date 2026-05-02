@@ -66,7 +66,6 @@ pub fn sanitize_filename(name: &str) -> String {
         })
         .collect::<String>();
     
-    // Trim trailing spaces and dots which are problematic on Windows
     sanitized = sanitized.trim_end_matches(|c| c == ' ' || c == '.').to_string();
     
     if sanitized.is_empty() {
@@ -210,7 +209,6 @@ fn inner_auto_trim_silence(path: &Path, threshold_db: f32, mode: TrimMode) -> Tr
     let total_samples = samples[0].len();
     let duration_ms = (total_samples as f32 / sample_rate as f32 * 1000.0) as u32;
 
-    // Safety: 100ms rule (reduced from 500ms to allow short SFX)
     if duration_ms < 100 {
         return TrimResult::Skipped("too_short".to_string());
     }
@@ -252,7 +250,6 @@ fn inner_auto_trim_silence(path: &Path, threshold_db: f32, mode: TrimMode) -> Tr
     let mut start_idx = lead_index;
     let mut end_idx = tail_index;
 
-    // Apply Mode Selection overrides
     match mode {
         TrimMode::Start => {
             end_idx = total_samples - 1;
@@ -260,21 +257,17 @@ fn inner_auto_trim_silence(path: &Path, threshold_db: f32, mode: TrimMode) -> Tr
         TrimMode::End => {
             start_idx = 0;
         }
-        TrimMode::Both => {
-            // Unchanged: use lead_index and tail_index as detected
-        }
+        TrimMode::Both => {}
     }
 
     let lead_ms = (start_idx as f32 / sample_rate as f32 * 1000.0) as u32;
     let tail_ms = ((total_samples - 1 - end_idx) as f32 / sample_rate as f32 * 1000.0) as u32;
 
-    // Safety Rules
     if lead_ms < 50 && tail_ms < 100 {
         return TrimResult::Skipped("below_min_threshold".to_string());
     }
 
     let trimmed_duration_samples = end_idx - start_idx;
-    // Safety: 80% rule (relaxed from 50% to allow aggressive trimming)
     if (trimmed_duration_samples as f32 / total_samples as f32) < 0.2 {
         return TrimResult::Skipped("trim_exceeds_threshold".to_string());
     }
@@ -284,7 +277,6 @@ fn inner_auto_trim_silence(path: &Path, threshold_db: f32, mode: TrimMode) -> Tr
         return TrimResult::Skipped("result_too_short".to_string());
     }
 
-    // Re-encode as WAV to temp file
     let temp_path = path.with_extension("tmp_wav");
     let spec = WavSpec {
         channels: samples.len() as u16,
@@ -309,16 +301,13 @@ fn inner_auto_trim_silence(path: &Path, threshold_db: f32, mode: TrimMode) -> Tr
         let _ = writer.finalize();
     }
 
-    // Final path update (always .wav)
     let mut final_path = path.to_path_buf();
     final_path.set_extension("wav");
 
-    // Atomic Move
     if let Err(e) = fs::rename(&temp_path, &final_path) {
         return TrimResult::Error(format!("Final Rename Error: {}", e));
     }
 
-    // If original wasn't .wav, delete original
     if path != final_path {
         let _ = fs::remove_file(path);
     }
@@ -345,7 +334,7 @@ pub fn export_profile(output_path: &Path, config_json: &str) -> Result<(), Strin
         manifest_version: 2,
         profile_name,
         created_at: Local::now().to_rfc3339(),
-        app_version: "4.2.2".to_string(),
+        app_version: "4.4.1".to_string(),
         sound_count: 0,
         sounds: Vec::new(),
         missing_at_export: Vec::new(),
@@ -374,7 +363,6 @@ pub fn export_profile(output_path: &Path, config_json: &str) -> Result<(), Strin
                             .unwrap_or("unknown_file")
                         );
                         
-                        // Check if already in zip (dedupe within export)
                         let canonical_filename = if let Some(existing_filename) = exported_hash_to_filename.get(&hash) {
                             existing_filename.clone()
                         } else {
@@ -411,7 +399,6 @@ pub fn export_profile(output_path: &Path, config_json: &str) -> Result<(), Strin
 
     zip.finish().map_err(|e| e.to_string())?;
 
-    // VALIDATION
     let verify_file = File::open(output_path).map_err(|e| e.to_string())?;
     let verify_zip = ZipArchive::new(verify_file).map_err(|e| e.to_string())?;
     if verify_zip.len() != expected_entry_count {
@@ -428,11 +415,9 @@ pub fn import_profile(zip_path: &Path, app_data_dir: &Path) -> Result<String, St
     let sounds_dir = app_data_dir.join("sounds");
     fs::create_dir_all(&sounds_dir).map_err(|e| format!("Import failed: could not create sounds directory: {}", e))?;
 
-    // Determine format
     let is_v2 = archive.by_name("manifest.json").is_ok();
     
     if is_v2 {
-        // 1. Determine manifest data and drop file handle immediately
         let manifest: Manifest = {
             let mut manifest_file = archive.by_name("manifest.json").map_err(|e| e.to_string())?;
             let mut manifest_content = String::new();
@@ -440,8 +425,6 @@ pub fn import_profile(zip_path: &Path, app_data_dir: &Path) -> Result<String, St
             serde_json::from_str(&manifest_content).map_err(|e| e.to_string())?
         };
 
-        // 2. Extract and Deduplicate
-        // First, build a map of existing hashes in appdata
         let mut hash_to_path = std::collections::HashMap::new();
         if let Ok(entries) = fs::read_dir(&sounds_dir) {
             for entry in entries.flatten() {
@@ -461,7 +444,6 @@ pub fn import_profile(zip_path: &Path, app_data_dir: &Path) -> Result<String, St
         for sound in &manifest.sounds {
             let zip_internal_path = format!("sounds/{}", sound.filename);
             
-            // Resilience: skip sounds that aren't actually in the zip
             let mut zip_file = match archive.by_name(&zip_internal_path) {
                 Ok(f) => f,
                 Err(_) => {
@@ -470,11 +452,9 @@ pub fn import_profile(zip_path: &Path, app_data_dir: &Path) -> Result<String, St
                 }
             };
             
-            // Check if we already have this exact file by hash
             let final_path = if let Some(existing_path) = hash_to_path.get(&sound.content_hash) {
                 existing_path.clone()
             } else {
-                // New sound
                 let timestamp = Local::now().format("%Y%m%d%H%M%S").to_string();
                 let hash_prefix = &sound.content_hash[..sound.content_hash.len().min(8)];
                 let unique_filename = format!("{}_{}_{}", timestamp, hash_prefix, sanitize_filename(&sound.filename));
@@ -487,7 +467,6 @@ pub fn import_profile(zip_path: &Path, app_data_dir: &Path) -> Result<String, St
                             skipped_count += 1;
                             continue;
                         }
-                        // Add to our hash map to avoid duplicates within the same import
                         hash_to_path.insert(sound.content_hash.clone(), target_path.clone());
                         target_path
                     }
@@ -498,7 +477,6 @@ pub fn import_profile(zip_path: &Path, app_data_dir: &Path) -> Result<String, St
                 }
             };
 
-            // Update mapping
             if final_mapping.get(&sound.event_key).is_none() {
                 final_mapping[&sound.event_key] = json!({
                     "enabled": true,
@@ -520,7 +498,6 @@ pub fn import_profile(zip_path: &Path, app_data_dir: &Path) -> Result<String, St
             }));
         }
 
-        // Add metadata for frontend feedback
         if let Some(obj) = final_mapping.as_object_mut() {
             obj.insert("__import_meta".to_string(), json!({
                 "total": total_planned,
@@ -530,7 +507,6 @@ pub fn import_profile(zip_path: &Path, app_data_dir: &Path) -> Result<String, St
 
         Ok(serde_json::to_string(&final_mapping).map_err(|e| e.to_string())?)
     } else {
-        // LEGACY .cs2vibe (v1) Support
         let mut json: Value = {
             let mut config_file = archive.by_name("config.json").map_err(|e| e.to_string())?;
             let mut config_content = String::new();
@@ -538,7 +514,6 @@ pub fn import_profile(zip_path: &Path, app_data_dir: &Path) -> Result<String, St
             serde_json::from_str(&config_content).map_err(|e| e.to_string())?
         };
 
-        // Use standard extraction logic for legacy
         for i in 0..archive.len() {
             let (entry_name, content) = {
                 let mut file = archive.by_index(i).map_err(|e| e.to_string())?;
@@ -590,7 +565,6 @@ pub fn peek_profile(zip_path: &Path) -> Result<String, String> {
     let file = File::open(zip_path).map_err(|e| e.to_string())?;
     let mut archive = ZipArchive::new(file).map_err(|e| e.to_string())?;
     
-    // Check manifest.json (v2)
     let manifest_content = {
         if let Ok(mut f) = archive.by_name("manifest.json") {
             let mut content = String::new();
@@ -605,7 +579,6 @@ pub fn peek_profile(zip_path: &Path) -> Result<String, String> {
         return Ok(content);
     }
 
-    // Fallback to config.json (legacy)
     let config_content = {
         if let Ok(mut f) = archive.by_name("config.json") {
             let mut content = String::new();
@@ -617,7 +590,6 @@ pub fn peek_profile(zip_path: &Path) -> Result<String, String> {
     };
 
     if let Some(content) = config_content {
-        // Synthesize a manifest for legacy files
         let legacy_json: Value = serde_json::from_str(&content).map_err(|e| e.to_string())?;
         let count = legacy_json.get("mapping")
             .and_then(|m| m.as_object())

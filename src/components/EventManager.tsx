@@ -86,7 +86,6 @@ export const EventManager: React.FC<EventManagerProps> = ({ isOpen, onClose }) =
   const [showWeaponPicker, setShowWeaponPicker] = useState(false);
   const [weaponSearch, setWeaponSearch] = useState('');
 
-  // Combine standard events with currently added weapons
   const activeWeaponEvents = WEAPON_CATALOG
     .filter(w => mapping[w.id])
     .map(w => ({

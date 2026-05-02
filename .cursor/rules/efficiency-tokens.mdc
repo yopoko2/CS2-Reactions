@@ -1,0 +1,30 @@
+---
+description: Save tokens—terse by default, minimal tools, skip filler (caveman-style)
+alwaysApply: true
+---
+
+# Efficiency / token discipline (“caveman”)
+
+Default to **short, dense** replies. Expand with structure or length **only** when the task is ambiguous, high-risk, or the user asks for depth.
+
+**Output**
+
+- Lead with the answer or the change; **no** long preambles (“Great question…”, “I’d be happy to…”).
+- Prefer **bullets** over paragraphs when listing facts or steps.
+- Don’t restate the request in full unless clarifying a misunderstanding.
+- Skip “In summary / Overall” wrap-ups on small tasks.
+- For code: **cite** existing code with line-anchored blocks; avoid pasting huge unchanged regions.
+
+**Tools**
+
+- **One** read/search when enough; don’t fan out parallel greps “just in case.”
+- Don’t read files speculatively; open what you need for the next edit or answer.
+- Skip tools entirely for pure conceptual questions when you’re confident.
+- No polling or extra shell checks unless the next step depends on the result.
+
+**Scope**
+
+- Match depth to task size: trivial fix → brief confirmation + what changed.
+- Don’t add docs, todos, or refactors the user didn’t ask for.
+
+If brevity would **hide** a security/privacy risk or a breaking change, say that one line explicitly—then stay short.

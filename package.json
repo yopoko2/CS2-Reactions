@@ -1,7 +1,7 @@
 {
   "name": "cs2-reactions",
   "private": true,
-  "version": "4.2.2",
+  "version": "4.4.1",
   "type": "module",
   "scripts": {
     "dev": "vite",

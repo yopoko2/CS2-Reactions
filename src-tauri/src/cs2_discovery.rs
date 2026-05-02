@@ -19,35 +19,27 @@ pub struct DiscoveryCandidate {
     pub confidence: DiscoveryConfidence,
 }
 
-/// Validates a CS2 path candidate:
-/// 1. Exists
-/// 2. Contains cs2.exe in game/bin/win64/
-/// 3. Contains game/csgo/cfg/
-/// 4. Is writable (Crucial for GSI)
+/// Install dir must contain `cs2.exe`, `game/csgo/cfg`, and be writable (GSI cfg).
 pub fn validate_path(path: &Path) -> bool {
     if !path.exists() {
         return false;
     }
 
-    // Binary check
     let bin_path = path.join("game/bin/win64/cs2.exe");
     if !bin_path.exists() {
         return false;
     }
 
-    // CFG directory check
     let cfg_path = path.join("game/csgo/cfg");
     if !cfg_path.exists() {
         return false;
     }
 
-    // Normalization & Symlink resolution
     let _canonical = match fs::canonicalize(path) {
         Ok(p) => p,
         Err(_) => return false,
     };
 
-    // Writable check (Try creating a temp file in cfg)
     let temp_file = cfg_path.join(".cs2reactions_write_test");
     match fs::write(&temp_file, "test") {
         Ok(_) => {
@@ -58,27 +50,21 @@ pub fn validate_path(path: &Path) -> bool {
     }
 }
 
-/// The Ironclad Discovery Engine
-/// Collects candidates from all layers, validates them, and returns the highest confidence match.
 pub fn find_cs2_install_dir() -> Option<PathBuf> {
     let mut candidates: Vec<DiscoveryCandidate> = Vec::new();
 
-    // LAYER 1: Active Process Intelligence
     if let Some(path) = find_via_active_process() {
         candidates.push(DiscoveryCandidate { path, confidence: DiscoveryConfidence::Process });
     }
 
-    // LAYER 2: Steam Library VDF Scanning
     if let Some(path) = find_via_vdf_scan() {
         candidates.push(DiscoveryCandidate { path, confidence: DiscoveryConfidence::Manifest });
     }
 
-    // LAYER 3: Registry Application Record (Fallback)
     if let Some(path) = find_via_registry() {
         candidates.push(DiscoveryCandidate { path, confidence: DiscoveryConfidence::Registry });
     }
 
-    // Filter, validate, and sort by highest confidence
     candidates.sort_by(|a, b| b.confidence.cmp(&a.confidence));
     
     for candidate in candidates {
@@ -172,7 +158,7 @@ fn find_via_vdf_scan() -> Option<PathBuf> {
     None
 }
 
-pub fn install_gsi_config(cs2_root: &Path) -> Result<(), String> {
+pub fn install_gsi_config(cs2_root: &Path, gsi_port: u16) -> Result<(), String> {
     let cfg_dir = if cs2_root.join("game/csgo/cfg").exists() {
         cs2_root.join("game/csgo/cfg")
     } else if cs2_root.join("csgo/cfg").exists() {
@@ -182,17 +168,18 @@ pub fn install_gsi_config(cs2_root: &Path) -> Result<(), String> {
     };
 
     let cfg_file = cfg_dir.join("gamestate_integration_cs2reactions.cfg");
-    
-    // Core GSI content
-    let content = r#""CS2 Reactions"
-{
-    "uri" "http://127.0.0.1:27532"
+
+    let uri = format!("http://127.0.0.1:{}", gsi_port);
+    let content = format!(
+        r#""CS2 Reactions"
+{{
+    "uri" "{}"
     "timeout" "1.0"
     "buffer"  "0.0"
     "throttle" "0.0"
     "heartbeat" "5.0"
     "data"
-    {
+    {{
         "provider"            "1"
         "map"                 "1"
         "round"               "1"
@@ -202,10 +189,11 @@ pub fn install_gsi_config(cs2_root: &Path) -> Result<(), String> {
         "player_match_stats"  "1"
         "player_weapons"      "1"
         "map_round_wins"      "1"
-    }
-}
-"#;
+    }}
+}}
+"#,
+        uri
+    );
 
-    // Force update the file to ensure we have the latest weapon modules
     fs::write(cfg_file, content).map_err(|e| format!("Autonomous GSI write failed: {}", e))
 }

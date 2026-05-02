@@ -147,8 +147,19 @@ const translations: Translations = {
   import_profile: {
     en: "Import Profile", ru: "Импортировать профиль", pt: "Importar Perfil", fr: "Importer le profil", zh: "导入配置"
   },
-  click_to_add_sound: {
-    en: "Click to add sound", ru: "Нажмите, чтобы добавить звук", pt: "Clique para adicionar um som", fr: "Cliquez pour ajouter un son", zh: "点击添加音频"
+  event_card_empty_title: {
+    en: "Add sounds",
+    ru: "Добавьте звуки",
+    pt: "Adicione sons",
+    fr: "Ajoutez des sons",
+    zh: "添加音效",
+  },
+  event_card_empty_sub: {
+    en: "Drag audio files onto this card, or click to browse. MP3, WAV, OGG.",
+    ru: "Перетащите аудио на карточку или нажмите для выбора. MP3, WAV, OGG.",
+    pt: "Arraste áudios para o card ou clique para escolher. MP3, WAV, OGG.",
+    fr: "Glissez des fichiers audio sur la carte ou cliquez pour parcourir. MP3, WAV, OGG.",
+    zh: "将音频拖到此卡片上，或点击浏览。支持 MP3、WAV、OGG。",
   },
   add_sound_btn: {
     en: "Add Sound", ru: "Добавить звук", pt: "Adicionar som", fr: "Ajouter un son", zh: "添加声音"
@@ -300,6 +311,13 @@ const translations: Translations = {
     pt: "Solte para adicionar os sons",
     fr: "Déposer pour ajouter",
     zh: "松开以添加声音"
+  },
+  sound_drag_reorder: {
+    en: "Drag to reorder sounds",
+    ru: "Перетащите для изменения порядка",
+    pt: "Arraste para reordenar sons",
+    fr: "Glisser pour réordonner les sons",
+    zh: "拖动以排序音效"
   },
   sounds_count: {
     en: "SOUNDS",
@@ -465,6 +483,20 @@ const translations: Translations = {
   settings_audio_output_section: { en: "Output Configuration", ru: "Конфигурация вывода", pt: "Configuração de Saída", fr: "Périphérique de Sortie", zh: "输出配置" },
   settings_audio_enhancement_section: { en: "Signal Processing", ru: "Улучшение сигнала", pt: "Aprimoramento de Sinal", fr: "Traitement du Signal", zh: "信号增强" },
   settings_gsi_status_desc: { en: "GSI Signal Status", ru: "Статус пульса GSI", pt: "Status do Batimento GSI", fr: "État du Signal GSI", zh: "GSI 心跳状态" },
+  settings_gsi_port_value: {
+    en: "Local HTTP listener: port {port}. Uses 27532 first; tries 27533–27537 if busy. Use Relink/Repair after restart so CS2’s cfg matches.",
+    ru: "Локальный HTTP: порт {port}. Сначала 27532, затем 27533–27537. После смены порта выполните повторное подключение.",
+    pt: "HTTP local: porta {port}. Tenta 27532, depois 27533–27537. Religue/Repare após mudança.",
+    fr: "Écoute HTTP locale : port {port}. Essaie 27532 puis 27533–27537. Reliez/réparez CS2 après changement.",
+    zh: "本地 HTTP 端口：{port}。优先 27532，占用时尝试 27533–27537。变更后请重新链接或修复。"
+  },
+  settings_gsi_port_unavailable: {
+    en: "GSI listener failed to start (all ports 27532–27537 may be in use). Restart the app or close conflicting tools.",
+    ru: "Сервер GSI не запущен (порты 27532–27537 заняты). Перезапустите приложение.",
+    pt: "O servidor GSI não iniciou (portas 27532–27537 podem estar ocupadas). Reinicie o app.",
+    fr: "Le serveur GSI n’a pas démarré (ports 27532–27537 occupés). Redémarrez l’application.",
+    zh: "GSI 服务未启动（端口 27532–27537 可能被占用）。请重启应用。"
+  },
   settings_gsi_repair_title: { en: "Repair GSI Integration", ru: "Восстановить интеграцию GSI", pt: "Reparar GSI", fr: "Réparer l'intégration GSI", zh: "修复 GSI 集成" },
   settings_gsi_repair_desc: { 
     en: "Force override the CS2 configuration file if weapon detection fails.", 
@@ -486,7 +518,6 @@ const translations: Translations = {
   tray_status_connected: { en: "CS2 Connected", ru: "CS2 Подключен", pt: "CS2 Conectado", fr: "CS2 Connecté", zh: "CS2 已连接" },
   tray_status_disconnected: { en: "CS2 Not Connected", ru: "CS2 Не подключен", pt: "CS2 Não conectado", fr: "CS2 Déconnecté", zh: "CS2 未连接" },
 
-  // v3.4.0 Production Prep
   gsi_restart_msg: {
     en: "GSI CONFIG UPDATED. YOU MUST RESTART COUNTER-STRIKE FOR CHANGES TO TAKE EFFECT.",
     ru: "КОНФИГУРАЦИЯ GSI ОБНОВЛЕНА. ВАМ НЕОБХОДИМО ПЕРЕЗАГРУЗИТЬ COUNTER-STRIKE, ЧТОБЫ ИЗМЕНЕНИЯ ВСТУПИЛИ В СИЛУ.",
@@ -737,7 +768,6 @@ export const useTranslation = () => {
     };
     detectLang();
 
-    // Sync language from other windows
     const unlisten = listen<Language>('lang-sync', (event) => {
       setLang(event.payload);
     });

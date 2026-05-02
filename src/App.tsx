@@ -35,15 +35,16 @@ import {
   Check,
   Headphones,
   Speaker,
-  Scissors
+  Scissors,
+  GripVertical
 } from 'lucide-react';
 import { open, save } from '@tauri-apps/plugin-dialog';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, Reorder, useDragControls } from 'framer-motion';
 import { isPermissionGranted, requestPermission, sendNotification } from '@tauri-apps/plugin-notification';
 
 
-const APP_VERSION = '4.2.2';
-const SUPPORTED_PROFILE_EXTENSIONS = [".CSreact", ".cs2vibe"]; // .cs2vibe kept for legacy import support
+const APP_VERSION = '4.4.1';
+const SUPPORTED_PROFILE_EXTENSIONS = [".CSreact", ".cs2vibe"];
 
 const TacticalIcon: React.FC<{ icon: any, color: string, size: number }> = ({ icon, color, size }) => {
   if (typeof icon === 'string') {
@@ -70,7 +71,6 @@ const TacticalIcon: React.FC<{ icon: any, color: string, size: number }> = ({ ic
   );
 };
 
-// --- TEMPORARY TRIM BADGE ---
 const TrimBadge: React.FC<{ leadMs: number; tailMs: number; t: any }> = ({ leadMs, tailMs, t }) => {
   const [isVisible, setIsVisible] = useState(true);
 
@@ -107,7 +107,6 @@ const TrimBadge: React.FC<{ leadMs: number; tailMs: number; t: any }> = ({ leadM
   );
 };
 
-// --- PREMIUM DEVICE SELECTOR ---
 const DeviceSelector: React.FC<{
   devices: MediaDeviceInfo[];
   selectedId: string;
@@ -382,9 +381,6 @@ const SUB_TO_BASE: Record<string, string> = {
   'first_blood': 'kills'
 };
 
-
-// Legacy icons replaced by EVENT_CATALOG in component logic
-
 const LayerToggle: React.FC<{ 
   isLayered: boolean, 
   onToggle: (val: boolean) => void, 
@@ -544,7 +540,6 @@ const EditableUnitValue: React.FC<{
     const trimmed = inputValue.trim();
     let num: number | null = null;
     
-    // Relative logic: +10 or -5
     if (trimmed.startsWith('+') || (trimmed.startsWith('-') && trimmed.length > 1 && !/^-?\d+(\.\d+)?$/.test(trimmed))) {
       const delta = parseFloat(trimmed);
       if (!isNaN(delta)) num = (value * multiplier) + delta;
@@ -557,7 +552,6 @@ const EditableUnitValue: React.FC<{
          setHasError(true);
          setTimeout(() => setHasError(false), 1000);
       }
-      // Apply different bounds for % vs dB
       const maxVal = multiplier === 100 ? 100 : 12;
       const minVal = multiplier === 100 ? 0 : 1;
       const capped = Math.max(minVal, Math.min(maxVal, num));
@@ -573,10 +567,8 @@ const EditableUnitValue: React.FC<{
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value.replace(',', '.');
-    // Allow digits, decimals, and relative signs
     if (val === '' || val === '+' || val === '-' || /^[+-]?\d*(\.\d{0,1})?$/.test(val)) {
       setInputValue(val);
-      // Live Preview for absolute numbers
       if (!val.startsWith('+') && !val.startsWith('-')) {
         const num = parseFloat(val);
         if (!isNaN(num)) {
@@ -766,6 +758,98 @@ const itemVariants = {
   show: { opacity: 1, scale: 1, y: 0 }
 };
 
+/** Sort a batch of sounds A–Z (numeric-aware); used for each import only—list order is otherwise manual. */
+const sortSoundsAlphabetically = (sounds: any[]) =>
+  [...sounds].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+
+const EventSoundRow: React.FC<{
+  s: any;
+  event: string;
+  t: (key: string) => string;
+  previewSoundFile: (path: string, volume: number) => void;
+  handleSoundVolumeChange: (event: string, soundId: string, volume: number) => void;
+  handleRemoveSoundItem: (event: string, soundId: string) => void;
+}> = ({ s, event, t, previewSoundFile, handleSoundVolumeChange, handleRemoveSoundItem }) => {
+  const dragControls = useDragControls();
+  return (
+    <Reorder.Item
+      as="div"
+      value={s}
+      dragListener={false}
+      dragControls={dragControls}
+      className="sound-item-row"
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        background: 'rgba(255,255,255,0.03)',
+        padding: '6px 10px',
+        borderRadius: '8px',
+        border: '1px solid rgba(255,255,255,0.05)'
+      }}
+    >
+      <button
+        type="button"
+        className="icon-btn-ghost"
+        aria-label={t('sound_drag_reorder')}
+        title={t('sound_drag_reorder')}
+        onPointerDown={(e) => dragControls.start(e)}
+        style={{
+          width: '22px',
+          height: '22px',
+          padding: 0,
+          cursor: 'grab',
+          flexShrink: 0,
+          touchAction: 'none'
+        }}
+      >
+        <GripVertical size={14} color="rgba(255,255,255,0.35)" />
+      </button>
+      <div style={{ flex: 1, overflow: 'hidden', display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+        <button
+          type="button"
+          className="icon-btn-ghost"
+          onClick={() => previewSoundFile(s.path, s.volume)}
+          style={{ width: '22px', height: '22px', padding: 0, flexShrink: 0 }}
+        >
+          <Play size={10} fill="rgba(255,255,255,0.4)" />
+        </button>
+        <div style={{ fontSize: '0.7rem', color: '#fff', opacity: 0.8, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontWeight: 600 }}>
+          {s.name}
+        </div>
+        {s.trimMetadata && !s.trimMetadata.skipped && (
+          <TrimBadge leadMs={s.trimMetadata.leadMs} tailMs={s.trimMetadata.tailMs} t={t} />
+        )}
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+        <input
+          type="range"
+          min={0}
+          max={1}
+          step={0.05}
+          value={s.volume}
+          onChange={(e) => handleSoundVolumeChange(event, s.id, parseFloat(e.target.value))}
+          style={{ width: '50px' }}
+        />
+        <EditableUnitValue
+          value={s.volume}
+          onChange={(v) => handleSoundVolumeChange(event, s.id, v)}
+          style={{ fontSize: '0.6rem', opacity: 0.5 }}
+        />
+        <button
+          type="button"
+          className="icon-btn-ghost destruct"
+          onClick={() => handleRemoveSoundItem(event, s.id)}
+          style={{ width: '24px', height: '24px' }}
+        >
+          <Trash2 size={10} />
+        </button>
+      </div>
+    </Reorder.Item>
+  );
+};
+
 const EventCard = React.memo(({ 
   event, 
   config, 
@@ -778,6 +862,7 @@ const EventCard = React.memo(({
   handleRemoveSoundItem, 
   handleAddSound, 
   handleLayerToggle,
+  handleReorderSounds,
   onRemoveEvent
 }: { 
   event: string, 
@@ -793,6 +878,7 @@ const EventCard = React.memo(({
   handleRemoveSoundItem: (event: string, soundId: string) => void,
   handleRemoveWeaponEvent?: (event: string) => void,
   handleAddSound: (event: string) => void,
+  handleReorderSounds: (event: string, sounds: any[]) => void,
 }) => {
   const [dragOver, setDragOver] = useState(false);
 
@@ -812,8 +898,6 @@ const EventCard = React.memo(({
   const onDrop = async (e: React.DragEvent) => {
     e.preventDefault();
     setDragOver(false);
-    // Explicitly do nothing here, the global tauri://drag-drop listener handles the payload
-    // and uses coordinates to find the target card.
   };
 
   return (
@@ -904,63 +988,39 @@ const EventCard = React.memo(({
         </div>
       </div>
 
-      <div className="sound-list-container" style={{ flex: 1, maxHeight: '200px', overflowY: 'auto', marginBottom: '12px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+      <div className="sound-list-container" style={{ flex: 1, maxHeight: '200px', overflowY: 'auto', marginBottom: '12px' }}>
         {config.sounds && config.sounds.length > 0 ? (
-          config.sounds.map((s: any) => (
-            <div key={s.id} className="sound-item-row" style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(255,255,255,0.03)', padding: '6px 10px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
-              <div style={{ flex: 1, overflow: 'hidden', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <button 
-                    className="icon-btn-ghost" 
-                    onClick={() => previewSoundFile(s.path, s.volume)}
-                    style={{ width: '22px', height: '22px', padding: 0 }}
-                  >
-                    <Play size={10} fill="rgba(255,255,255,0.4)" />
-                  </button>
-                <div style={{ fontSize: '0.7rem', color: '#fff', opacity: 0.8, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontWeight: 600 }}>
-                  {s.name}
-                </div>
-                {s.trimMetadata && !s.trimMetadata.skipped && (
-                  <TrimBadge 
-                    leadMs={s.trimMetadata.leadMs} 
-                    tailMs={s.trimMetadata.tailMs} 
-                    t={t} 
-                  />
-                )}
-              </div>
-              
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <input 
-                  type="range" 
-                  min="0" 
-                  max="1" 
-                  step="0.05"
-                  value={s.volume}
-                  onChange={(e) => handleSoundVolumeChange(event, s.id, parseFloat(e.target.value))}
-                  style={{ width: '50px' }}
-                />
-                <EditableUnitValue 
-                  value={s.volume} 
-                  onChange={(v) => handleSoundVolumeChange(event, s.id, v)}
-                  style={{ fontSize: '0.6rem', opacity: 0.5 }}
-                />
-                <button 
-                  className="icon-btn-ghost destruct" 
-                  onClick={() => handleRemoveSoundItem(event, s.id)}
-                  style={{ width: '24px', height: '24px' }}
-                >
-                  <Trash2 size={10} />
-                </button>
-              </div>
-            </div>
-          ))
+          <Reorder.Group
+            axis="y"
+            as="div"
+            values={config.sounds}
+            onReorder={(order) => handleReorderSounds(event, order)}
+            style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}
+          >
+            {config.sounds.map((s: any) => (
+              <EventSoundRow
+                key={s.id}
+                s={s}
+                event={event}
+                t={t}
+                previewSoundFile={previewSoundFile}
+                handleSoundVolumeChange={handleSoundVolumeChange}
+                handleRemoveSoundItem={handleRemoveSoundItem}
+              />
+            ))}
+          </Reorder.Group>
         ) : (
           <div 
              className="empty-drop-zone"
              onClick={() => handleAddSound(event)}
-             style={{ flex: 1, border: '1px dashed rgba(255,255,255,0.1)', borderRadius: '12px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '24px', cursor: 'pointer', transition: 'all 0.3s' }}
+             style={{ flex: 1, border: '1px dashed rgba(255,255,255,0.12)', borderRadius: '12px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '10px', padding: '20px 16px', cursor: 'pointer', transition: 'all 0.3s', textAlign: 'center' }}
           >
-            <Plus size={20} opacity={0.3} />
-            <span style={{ fontSize: '0.7rem', opacity: 0.3, fontWeight: 700, textTransform: 'uppercase' }}>{t('click_to_add_sound')}</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', opacity: 0.45 }}>
+              <Upload size={18} strokeWidth={2} />
+              <Plus size={18} strokeWidth={2} />
+            </div>
+            <span style={{ fontSize: '0.72rem', opacity: 0.45, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{t('event_card_empty_title')}</span>
+            <span style={{ fontSize: '0.65rem', opacity: 0.32, fontWeight: 600, lineHeight: 1.45, maxWidth: '260px' }}>{t('event_card_empty_sub')}</span>
           </div>
         )}
       </div>
@@ -1091,8 +1151,7 @@ const DebugConsole: React.FC<{ logs: any[], t: any }> = ({ logs, t }) => {
 
 const App: React.FC = () => {
   const { t, lang, setLang, languages } = useTranslation();
-  
-  // Toast System
+
   const [toast, setToast] = useState<{ message: string, type: 'success' | 'warning' | 'error' | 'info' } | null>(null);
   const showToast = (message: string, type: 'success' | 'warning' | 'error' | 'info' = 'info') => {
     setToast({ message, type });
@@ -1150,7 +1209,6 @@ const App: React.FC = () => {
   
   const [settingsTab, setSettingsTab] = useState<'general' | 'audio' | 'sync'>('general');
 
-  // Helper to fix excessive backslashes in display
   const formatDisplayPath = (path: string | null) => {
     if (!path) return t('not_linked');
     return path.replace(/\\+/g, '\\');
@@ -1187,24 +1245,21 @@ const App: React.FC = () => {
   const [showVolumeBoostModal, setShowVolumeBoostModal] = useState(false);
   const [showEventManager, setShowEventManager] = useState(false);
 
-  // --- SMART CLOSTURE STATE ---
   const [minimizeToTray, setMinimizeToTray] = useState(true);
   const [skipQuitConfirm, setSkipQuitConfirm] = useState(false);
   const [trayEducationCount, setTrayEducationCount] = useState(0);
   const [showQuitModal, setShowQuitModal] = useState(false);
   const [showResetModal, setShowResetModal] = useState(false);
   const [dontAskQuitAgain, setDontAskQuitAgain] = useState(false);
+  const [gsiListenPort, setGsiListenPort] = useState<number | null>(null);
 
-  // --- PROFILE OVERHAUL STATE ---
   const [isDraggingProfile, setIsDraggingProfile] = useState(false);
   const [peekData, setPeekData] = useState<any>(null);
   const [peekPath, setPeekPath] = useState<string | null>(null);
 
-  // Resetting hints and requesting permissions
   useEffect(() => {
     localStorage.removeItem("gsi_hint_dismissed");
-    
-    // Explicitly request permissions on startup for stability
+
     const req = async () => {
       try {
         await requestAudioPermissions();
@@ -1217,7 +1272,6 @@ const App: React.FC = () => {
     req();
   }, []);
 
-  // --- Smart Window Scaling ---
   useEffect(() => {
     const scaleWindow = async () => {
       try {
@@ -1245,7 +1299,6 @@ const App: React.FC = () => {
           }
         }
         
-        // Allow a brief moment for the GPU to paint the dark background before resolving visibility
         setTimeout(async () => {
           await appWindow.show();
         }, 50);
@@ -1258,7 +1311,6 @@ const App: React.FC = () => {
     scaleWindow();
   }, []);
 
-  // --- Auto-load config on startup ---
   useEffect(() => {
     const loadSaved = async () => {
       try {
@@ -1266,7 +1318,6 @@ const App: React.FC = () => {
         if (json) {
           const saved = JSON.parse(json);
           if (saved.mapping) {
-            // BACKWARD COMPAT: Merge saved mapping with new default catalog
             const defaults = getDefaultMapping();
             const merged = { ...defaults };
             
@@ -1275,20 +1326,16 @@ const App: React.FC = () => {
                 merged[key] = {
                   ...merged[key],
                   ...saved.mapping[key],
-                  // Ensure subOf relationship is preserved from catalog
                   subOf: EVENT_CATALOG.find(e => e.id === key)?.subOf
                 };
               } else if (key.startsWith('weapon_')) {
-                // Preserved custom weapon events
                 merged[key] = saved.mapping[key];
               }
             });
 
-            // Ensure critical events exist, but DO NOT force them enabled if the user explicitly hid them
             ['kills', 'headshots', 'deaths'].forEach(id => {
               if (!merged[id]) {
                 merged[id] = defaults[id] || { sounds: [], enabled: true, dashboardVisible: true, mode: 'random', currentIndex: 0, history: [] };
-                // Only force them on if they were legitimately missing entirely
                 merged[id].enabled = true;
                 merged[id].dashboardVisible = true;
               }
@@ -1302,7 +1349,6 @@ const App: React.FC = () => {
           if (saved.pitchVariationEnabled !== undefined) setPitchVariationEnabled(saved.pitchVariationEnabled);
           if (saved.pitchIntensity !== undefined) setPitchIntensity(saved.pitchIntensity);
           
-          // Load Smart Closure settings
           if (saved.minimizeToTray !== undefined) setMinimizeToTray(saved.minimizeToTray);
           if (saved.skipQuitConfirm !== undefined) setSkipQuitConfirm(saved.skipQuitConfirm);
           if (saved.trayEducationCount !== undefined) setTrayEducationCount(saved.trayEducationCount);
@@ -1324,7 +1370,6 @@ const App: React.FC = () => {
     loadSaved();
   }, []);
 
-  // --- Auto-save config ---
   useEffect(() => {
     const autoSave = async () => {
       try {
@@ -1342,13 +1387,27 @@ const App: React.FC = () => {
     autoSave();
   }, [mapping, masterVolume, cs2Path, autostart, muteHotkey, pitchVariationEnabled, pitchIntensity, minimizeToTray, skipQuitConfirm, trayEducationCount, muteWhileDead, muteWhileDeadExcludeGlobal]);
 
-  // --- Handle Native X / Close ---
+  useEffect(() => {
+    let cancelled = false;
+    invoke<number | null>('get_gsi_listen_port')
+      .then((p) => {
+        if (!cancelled && typeof p === 'number') setGsiListenPort(p);
+      })
+      .catch(() => {});
+    const unlisten = listen<{ port: number }>('gsi_listening', (ev) => {
+      if (typeof ev.payload?.port === 'number') setGsiListenPort(ev.payload.port);
+    });
+    return () => {
+      cancelled = true;
+      unlisten.then((f) => f());
+    };
+  }, []);
+
   useEffect(() => {
     const unlisten = listen('main-window-close', () => {
       if (minimizeToTray) {
         invoke('hide_main_window');
-        
-        // Handle Tray Education Toast
+
         if (trayEducationCount < 3) {
           handleTrayEducation();
         }
@@ -1374,7 +1433,7 @@ const App: React.FC = () => {
         sendNotification({
           title: "CS2 Reactions",
           body: t('toast_tray_education'),
-          icon: 'logo.png' // Assumes existence in public/
+          icon: 'logo.png'
         });
         setTrayEducationCount(prev => prev + 1);
       }
@@ -1383,8 +1442,6 @@ const App: React.FC = () => {
     }
   };
 
-  // --- Handle Global Drag & Drop (Unified Profile + Sound) ---
-  // We use a ref to always have the latest handleBatchAddSounds without re-registering Tauri listeners
   const handleBatchAddSoundsRef = useRef(handleBatchAddSounds);
   useEffect(() => { handleBatchAddSoundsRef.current = handleBatchAddSounds; });
 
@@ -1417,7 +1474,6 @@ const App: React.FC = () => {
           return;
         }
 
-        // Standard Sound Drop Logic — use ref to get latest handleBatchAddSounds
         const { x, y } = event.payload.position;
         const elementAtPoint = document.elementFromPoint(x, y);
         if (elementAtPoint) {
@@ -1456,12 +1512,10 @@ const App: React.FC = () => {
     }).catch(console.error);
   }, [lang, t, isMuted]);
 
-  // --- Sync Volume to Tray ---
   useEffect(() => {
     invoke('sync_volume_value', { volume: masterVolume });
   }, [masterVolume]);
 
-  // --- Startup handling ---
   const handleToggleAutostart = async (val: boolean) => {
     try {
       await invoke('set_autostart', { enabled: val });
@@ -1577,12 +1631,10 @@ const App: React.FC = () => {
       
       if (validPaths.length === 0) return;
 
-      // Use allSettled so a single bad file never kills the entire batch
       const settled = await Promise.allSettled(validPaths.map(async (p) => {
         const name = p.split(/[\\/]/).pop() || 'Unknown';
         let finalPath = await invoke<string>('copy_sound', { path: p });
         
-        // Guard: if Tauri returned an empty path, bail on this file
         if (!finalPath || finalPath.trim() === '') {
           throw new Error(`copy_sound returned empty path for: ${name}`);
         }
@@ -1620,7 +1672,6 @@ const App: React.FC = () => {
         };
       }));
 
-      // Collect only succeeded imports; log each failure individually
       const results: any[] = [];
       settled.forEach((r, i) => {
         if (r.status === 'fulfilled') {
@@ -1638,6 +1689,7 @@ const App: React.FC = () => {
         setMapping((prev: AudioMapping) => {
           const existingPaths = new Set(prev[event]?.sounds.map(s => s.path) || []);
           const uniqueResults = results.filter(r => !existingPaths.has(r.path));
+          const sortedBatch = sortSoundsAlphabetically(uniqueResults);
           
           return {
             ...prev,
@@ -1645,8 +1697,8 @@ const App: React.FC = () => {
               ...prev[event],
               sounds: [
                 ...(prev[event]?.sounds || []),
-                ...uniqueResults
-              ].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))
+                ...sortedBatch
+              ]
             }
           };
         });
@@ -1692,6 +1744,16 @@ const App: React.FC = () => {
     }));
   };
 
+  const handleReorderSounds = React.useCallback((event: string, newSounds: any[]) => {
+    setMapping((prev: AudioMapping) => ({
+      ...prev,
+      [event]: {
+        ...prev[event],
+        sounds: newSounds
+      }
+    }));
+  }, [setMapping]);
+
   const handleSoundVolumeChange = (event: string, soundId: string, volume: number) => {
     setMapping((prev: AudioMapping) => ({
       ...prev,
@@ -1724,8 +1786,16 @@ const App: React.FC = () => {
 
   const handleImportProfile = async () => {
     try {
+      let defaultPath: string | undefined;
+      try {
+        const dir = await invoke<string | null>('get_bundled_presets_dir');
+        if (dir) defaultPath = dir;
+      } catch {
+        /* optional */
+      }
       const selected = await open({
         multiple: false,
+        defaultPath,
         filters: [{ name: 'Profiles', extensions: ['CSreact', 'cs2vibe'] }]
       });
       if (selected && typeof selected === 'string') {
@@ -1744,7 +1814,6 @@ const App: React.FC = () => {
       const importedMapping = JSON.parse(json);
       const meta = importedMapping.__import_meta || { total: 0, skipped: 0 };
       
-      // Clean up metadata before saving to state
       delete importedMapping.__import_meta;
       
       setMapping(prev => {
@@ -2036,6 +2105,7 @@ const App: React.FC = () => {
                       handleRemoveSoundItem={handleRemoveSoundItem}
                       handleAddSound={handleAddSound}
                       handleLayerToggle={handleLayerToggle}
+                      handleReorderSounds={handleReorderSounds}
                       onRemoveEvent={(id) => {
                         if (id.startsWith('weapon_')) {
                           removeWeaponEvent(id);
@@ -2146,6 +2216,7 @@ const App: React.FC = () => {
                               handleRemoveSoundItem={handleRemoveSoundItem}
                               handleAddSound={handleAddSound}
                               handleLayerToggle={handleLayerToggle}
+                              handleReorderSounds={handleReorderSounds}
                             />
                           ))}
                   </div>
@@ -2446,6 +2517,11 @@ const App: React.FC = () => {
                               {isGsiConnected ? t('status_connected') : isCs2Running ? t('status_detected') : t('status_disconnected')}
                             </span>
                             <p className="setting-desc" style={{ marginTop: '2px' }}>{t('settings_gsi_status_desc')}</p>
+                            <p className="setting-desc" style={{ marginTop: '6px', fontSize: '0.65rem', opacity: 0.5 }}>
+                              {gsiListenPort != null
+                                ? t('settings_gsi_port_value').replace('{port}', String(gsiListenPort))
+                                : t('settings_gsi_port_unavailable')}
+                            </p>
                           </div>
                         </div>
                       </div>

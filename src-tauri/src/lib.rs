@@ -4,15 +4,31 @@ mod profile_manager;
 
 use tauri::Manager;
 use tauri::Emitter;
+use tauri::path::BaseDirectory;
 use std::path::Path;
 use std::sync::{Arc, Mutex, atomic::{AtomicBool, Ordering}};
 use tauri_plugin_global_shortcut::ShortcutState;
 
 struct GsiState(Mutex<Arc<AtomicBool>>);
+/// Active local GSI HTTP port (must match `gamestate_integration_cs2reactions.cfg`).
+struct GsiActivePort(Mutex<Option<u16>>);
 struct SystemState(Mutex<sysinfo::System>);
 
+fn gsi_listen_port(app: &tauri::AppHandle) -> Result<u16, String> {
+    let state = app
+        .try_state::<GsiActivePort>()
+        .ok_or_else(|| "GSI port state not initialized.".to_string())?;
+    let g = state
+        .0
+        .lock()
+        .map_err(|_| "GSI port lock poisoned.".to_string())?;
+    g.ok_or_else(|| {
+        "The GSI server is not listening (all ports 27532–27537 may be in use). Restart CS2 Reactions or close conflicting apps."
+            .to_string()
+    })
+}
+
 const AUTOSTART_KEY: &str = "CS2Reactions";
-// Keep for automatic migration/cleanup of legacy versions
 const LEGACY_AUTOSTART_KEYS: &[&str] = &["CS2 Reactions", "CS2Vibe"];
 
 #[tauri::command]
@@ -22,7 +38,6 @@ fn link_to_cs2(app: tauri::AppHandle) -> Result<String, String> {
     use std::time::Duration;
     use serde_json::Value;
 
-    // LAYER 3: Check Cache first (from config.json)
     let app_data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
     let config_path = app_data_dir.join("config.json");
     if let Ok(config_str) = std::fs::read_to_string(&config_path) {
@@ -30,14 +45,14 @@ fn link_to_cs2(app: tauri::AppHandle) -> Result<String, String> {
             if let Some(cached_path) = json.get("cs2Path").and_then(|p| p.as_str()) {
                 let p = std::path::PathBuf::from(cached_path);
                 if cs2_discovery::validate_path(&p) {
-                    let _ = cs2_discovery::install_gsi_config(&p);
+                    let port = gsi_listen_port(&app)?;
+                    let _ = cs2_discovery::install_gsi_config(&p, port)?;
                     return Ok(format!("Successfully linked to CS2 at {:?}", p));
                 }
             }
         }
     }
 
-    // Execute Hardened Discovery with 20s Hard Timeout
     let (tx, rx) = mpsc::channel();
     
     thread::spawn(move || {
@@ -47,7 +62,8 @@ fn link_to_cs2(app: tauri::AppHandle) -> Result<String, String> {
 
     match rx.recv_timeout(Duration::from_secs(5)) {
         Ok(Some(path)) => {
-            cs2_discovery::install_gsi_config(&path)?;
+            let port = gsi_listen_port(&app)?;
+            cs2_discovery::install_gsi_config(&path, port)?;
             Ok(format!("Successfully linked to CS2 at {:?}", path))
         }
         Ok(None) => Err("Could not find Counter-Strike 2. Please make sure the game is installed.".to_string()),
@@ -56,9 +72,10 @@ fn link_to_cs2(app: tauri::AppHandle) -> Result<String, String> {
 }
 
 #[tauri::command]
-fn link_to_cs2_manual(path: String) -> Result<String, String> {
+fn link_to_cs2_manual(path: String, app: tauri::AppHandle) -> Result<String, String> {
     let p = Path::new(&path);
-    cs2_discovery::install_gsi_config(p)?;
+    let port = gsi_listen_port(&app)?;
+    cs2_discovery::install_gsi_config(p, port)?;
     Ok(format!("Successfully linked to CS2 at {:?}", p))
 }
 
@@ -83,7 +100,6 @@ fn save_config(app: tauri::AppHandle, json: String) -> Result<(), String> {
     }
     let config_path = app_data_dir.join("config.json");
     
-    // Safety Backup: prevents configuration loss on write failure
     if config_path.exists() {
         let backup_path = config_path.with_extension("json.bak");
         let _ = std::fs::copy(&config_path, backup_path);
@@ -100,13 +116,11 @@ fn load_config(app: tauri::AppHandle) -> Result<String, String> {
 
     if config_path.exists() {
         let content = std::fs::read_to_string(&config_path).map_err(|e| e.to_string())?;
-        // If valid JSON, return it
         if serde_json::from_str::<serde_json::Value>(&content).is_ok() {
             return Ok(content);
         }
     }
     
-    // Fallback to backup if main is missing or corrupted
     if backup_path.exists() {
         if let Ok(content) = std::fs::read_to_string(&backup_path) {
             if serde_json::from_str::<serde_json::Value>(&content).is_ok() {
@@ -127,7 +141,6 @@ fn export_profile_cmd(output_path: String, config_json: String) -> Result<(), St
 fn is_cs2_running(state: tauri::State<'_, SystemState>) -> bool {
     let mut s = state.0.lock().unwrap_or_else(|e| e.into_inner());
     s.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
-    // Case-insensitive check for cs2.exe or cs2
     let exists = s.processes().values().any(|p| {
         let name = p.name().to_string_lossy().to_lowercase();
         name == "cs2.exe" || name == "cs2"
@@ -162,7 +175,6 @@ fn set_autostart_internal(enabled: bool) -> Result<(), String> {
             .to_string();
         key.set_value(AUTOSTART_KEY, &exe_path).map_err(|e| e.to_string())?;
     } else {
-        // Remove current key and all known legacy version keys
         let _ = key.delete_value(AUTOSTART_KEY);
         for legacy in LEGACY_AUTOSTART_KEYS {
             let _ = key.delete_value(legacy);
@@ -184,7 +196,6 @@ fn sync_autostart_with_config(app: &tauri::AppHandle) {
     let config_path = app_data_dir.join("config.json");
     if let Ok(content) = std::fs::read_to_string(config_path) {
         if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
-            // Enforce explicitly saved boolean state
             if let Some(enabled) = json.get("autostart").and_then(|v| v.as_bool()) {
                 let _ = set_autostart_internal(enabled);
             }
@@ -244,21 +255,59 @@ fn update_tray_menu(app: tauri::AppHandle, labels: serde_json::Value) -> Result<
 }
 
 #[tauri::command]
-fn restart_gsi_server(app: tauri::AppHandle, state: tauri::State<'_, GsiState>) -> Result<(), String> {
-    let mut current_flag = state.0.lock().unwrap_or_else(|e| e.into_inner());
-    current_flag.store(false, Ordering::SeqCst);
-    
-    // Wait for port release (short delay)
+fn restart_gsi_server(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, GsiState>,
+    port_state: tauri::State<'_, GsiActivePort>,
+) -> Result<(), String> {
+    {
+        let flag = state.0.lock().unwrap_or_else(|e| e.into_inner());
+        flag.store(false, Ordering::SeqCst);
+    }
+
     std::thread::sleep(std::time::Duration::from_millis(150));
-    
-    *current_flag = gsi_server::GsiServer::start(app);
-    Ok(())
+
+    match gsi_server::GsiServer::start(app.clone()) {
+        Ok((new_flag, port)) => {
+            *state.0.lock().unwrap_or_else(|e| e.into_inner()) = new_flag;
+            *port_state.0.lock().unwrap_or_else(|e| e.into_inner()) = Some(port);
+            let _ = app.emit("gsi_listening", serde_json::json!({ "port": port }));
+            Ok(())
+        }
+        Err(e) => {
+            *port_state.0.lock().unwrap_or_else(|e| e.into_inner()) = None;
+            Err(e)
+        }
+    }
+}
+
+#[tauri::command]
+fn get_gsi_listen_port(app: tauri::AppHandle) -> Option<u16> {
+    let s = app.try_state::<GsiActivePort>()?;
+    s.0.lock().ok().and_then(|g| *g)
+}
+
+/// Directory containing bundled `.CSreact` starter packs (`$RESOURCE/presets`, or `src-tauri/presets` in debug).
+#[tauri::command]
+fn get_bundled_presets_dir(app: tauri::AppHandle) -> Option<String> {
+    if let Ok(path) = app.path().resolve("presets", BaseDirectory::Resource) {
+        if path.is_dir() {
+            return Some(path.to_string_lossy().to_string());
+        }
+    }
+    #[cfg(debug_assertions)]
+    {
+        let dev = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("presets");
+        if dev.is_dir() {
+            return Some(dev.to_string_lossy().to_string());
+        }
+    }
+    None
 }
 
 #[tauri::command]
 fn quit_app(app: tauri::AppHandle) {
     let _ = app.emit("app-quit", ());
-    // Brief delay to allow frontend cleanup (audio stopping)
     std::thread::spawn(move || {
         std::thread::sleep(std::time::Duration::from_millis(500));
         app.exit(0);
@@ -280,9 +329,6 @@ fn hide_main_window(app: tauri::AppHandle) {
 
 #[tauri::command]
 fn update_tray_mute_status(_app: tauri::AppHandle, _is_muted: bool) -> Result<(), String> {
-    // This is primarily for syncing state if needed, but current tray menu
-    // update logic in update_tray_menu already handles this.
-    // Keeping this command registered to satisfy frontend calls.
     Ok(())
 }
 
@@ -349,15 +395,22 @@ pub fn run() {
             .build())
         .plugin(tauri_plugin_notification::init())
         .setup(|app| {
-            println!("[STARTUP] CS2 Reactions v4.2.2 initializing...");
-            // Start GSI Server
+            println!("[STARTUP] CS2 Reactions v4.4.1 initializing...");
             let handle = app.handle().clone();
-            let gsi_running = gsi_server::GsiServer::start(handle);
-            println!("[STARTUP] GSI Server requested on port 27532.");
-            app.manage(GsiState(Mutex::new(gsi_running)));
+            match gsi_server::GsiServer::start(handle.clone()) {
+                Ok((gsi_running, port)) => {
+                    println!("[STARTUP] GSI server listening on port {}.", port);
+                    app.manage(GsiState(Mutex::new(gsi_running)));
+                    app.manage(GsiActivePort(Mutex::new(Some(port))));
+                }
+                Err(e) => {
+                    eprintln!("[STARTUP] GSI server failed: {}", e);
+                    app.manage(GsiState(Mutex::new(Arc::new(AtomicBool::new(false)))));
+                    app.manage(GsiActivePort(Mutex::new(None)));
+                }
+            }
             app.manage(SystemState(Mutex::new(sysinfo::System::new())));
 
-            // Watchdog: Poll for CS2 process every 2 seconds
             let handle_watchdog = app.handle().clone();
             std::thread::spawn(move || {
                 let s_state: tauri::State<'_, SystemState> = handle_watchdog.state();
@@ -405,7 +458,6 @@ pub fn run() {
                 })
                 .build(app)?;
 
-            // Smart Window Sizing: scale to 70% of the primary monitor, clamped to sensible bounds
             if let Some(window) = app.get_webview_window("main") {
                 if let Ok(Some(monitor)) = window.primary_monitor() {
                     let screen_w = monitor.size().width as f64 / monitor.scale_factor();
@@ -416,8 +468,6 @@ pub fn run() {
                     let _ = window.center();
                 }
             }
-
-            // Ensure Regsitry Autostart is in sync with config.json
 
             sync_autostart_with_config(app.handle());
             
@@ -452,7 +502,9 @@ pub fn run() {
             show_main_window,
             hide_main_window,
             is_cs2_running,
-            quit_app
+            quit_app,
+            get_gsi_listen_port,
+            get_bundled_presets_dir
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

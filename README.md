@@ -4,7 +4,9 @@
 
 # CS2 Reactions
 
-A small tool I built because I always wanted custom SFX on kills in competitive and proper killstreak sounds in deathmatch, and there just wasn’t a simple way to do it. So I ended up making it myself.
+A small tool I built because I always wanted custom sounds playing on kills in
+competitive and killstreak audio in deathmatch, and there was never a simple way
+to do that. So I built it!
 
 ## Preview
 
@@ -14,13 +16,14 @@ A small tool I built because I always wanted custom SFX on kills in competitive 
 
 ## Install
 
-Grab the latest installer from the [releases](https://github.com/yopoko2/CS2-Reactions/releases/latest) page and run it. Windows Defender may
+Grab the latest installer from the releases page and run it. Windows Defender may
 flag it as a false positive caused by the global hotkey hook. Source code is
 available if you want to verify.
 
-Once installed, open CS2 then CS2 Reactions. Click "Link to CS2" to set up the
-GSI config. If it fails, use "Browse Folders" to locate your CS2 installation
-folder manually. If sounds aren't triggering, try relaunching CS2.
+Once installed, open CS2 then CS2 Reactions. Click "Link to CS2" to install the
+game config. If that fails, use "Browse Folders" and point at your CS2 folder.
+If sounds don’t fire, relaunch CS2. After an app update, if things were working
+before, try **Relink** in settings so the game and the app stay in sync.
 
 ## Features
 
@@ -28,6 +31,7 @@ folder manually. If sounds aren't triggering, try relaunching CS2.
 - Per-weapon sound triggers, covers most CS2 weapons
 - Random or sequential playback, sequential mode is labeled "Killstreak" and
   plays sounds in order as your streak grows, resetting on death
+- Reorder sounds on each card (drag the handle on the left of each row)
 - Sound profile system (.CSreact) for importing and exporting profiles
 - Modifiable global mute hotkey
 - Runs in the system tray, autostart optional
@@ -39,11 +43,11 @@ folder manually. If sounds aren't triggering, try relaunching CS2.
 
 | Topic | Details |
 |---|---|
-| **Adding sounds** | Click "Add sound" on any event card, or drag and drop audio files directly onto them. You can also drag and drop .CSreact profile files anywhere on the app to import them. |
-| **Profiles** | .CSreact files that contain your config and sounds packaged together. Click export profile in the app to create one, then send it to anyone to load. |
-| **Sound ordering** | Sounds on a card play in alphabetical order. Prefix filenames with numbers like "1_sound.mp3" to control the sequence in Killstreak mode. |
-| **First kill** | The first kill of a match won't trigger a sound. GSI limitation, nothing fixable without moving away from the GSI approach. |
-| **Mute While Dead** | Can occasionally malfunction due to how GSI reports player state. No clean fix for this right now. |
+| **Adding sounds** | Use **Add sound** on a card, drop audio files onto a card, or drop a **.CSreact** profile anywhere on the window. |
+| **Profiles** | **.CSreact** packs your settings and sound files. Export from the app, share the file, and the other person can import it. |
+| **Order of sounds** | Top to bottom on the card. **Killstreak** mode follows that order. When you add several files at once, they’re sorted A–Z and added under what you already had—reorder anytime by dragging. |
+| **First kill in a round** | Once in a while the first kill of a round may not play a sound. That’s a quirk of what the game reports, not something you misconfigured. |
+| **Mute while dead** | Mutes your kill-style sounds while you’re dead so you don’t get triggers in spectator. Round-wide or match events can still be allowed via the option in settings if you want. |
 
 ## Privacy
 
@@ -52,17 +56,16 @@ telemetry, no network requests outside your machine.
 
 ## How it works
 
-CS2 has an official telemetry system called GSI that sends game state updates
-over HTTP to a local server. CS2 Reactions runs that server in Rust on port
-27532, passes the data through Tauri's IPC layer to a React frontend, and
-triggers audio when it detects a state change worth reacting to.
+Counter-Strike 2 can send **Game State Integration (GSI)** updates to your own
+PC over HTTP. This app runs a small listener (it picks the first free port in
+the range **27532–27537**), reads those updates, and plays your sounds when the
+state matches an event you configured.
 
-I went with this approach because the alternatives (memory reading, screen
-capture) either risk a VAC ban or introduce too much latency. GSI only exposes
-state-level data and adds some delay compared to direct memory access, but it
-is the only method that doesn't touch the game process. The app never reads
-game memory or modifies any game files beyond writing the GSI config into the
-cfg folder.
+That keeps everything official-side: no reading game memory, no hooking the
+process—only the same kind of data streaming tools have used for years. The
+tradeoff is a bit of delay versus cheats-level hooks, and very occasionally the
+game omits or delays a stat this app cares about. The only file written inside
+CS2 is the GSI config in `game\csgo\cfg\`.
 
 ## Files
 
@@ -81,20 +84,16 @@ you want a clean removal.
 
 **Blank window on launch** — install WebView2 from microsoft.com/en-us/edge/webview2.
 
-**GSI not working / no sounds** — port 27532 may be in use by another app or a
-duplicate instance of CS2 Reactions. The error is shown in-app. Close the
-conflicting process and relaunch.
+**GSI not working / no sounds** — Open **Settings → GSI & Maintenance** and note the port listed there. If you restarted the app and sounds stopped, use **Relink** or **Repair** so CS2’s config matches that port. The app tries several ports if the default is busy; only one program should own that listener—close a duplicate copy of this app or another GSI tool, then try again.
 
 **Defender blocking install or startup** — add an exclusion for the app in
 Windows Security settings.
 
 ## Limitations
 
-- GSI adds latency on top of the engine tick rate; fine for sound feedback but
-  not instant
-- Port 27532 must be free or the GSI server won't start. It is not
-  user-configurable
-- Stacking a lot of sounds at once may cause clipping
+- Feedback is tied to GSI timing—fine for reactions, not frame-perfect
+- The listener needs a free slot in a fixed port range; you can’t type a custom port. If the app isn’t on the default, **Relink** after install or restart
+- Playing many loud clips at once can clip your output
 
 ## Building from source
 

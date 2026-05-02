@@ -1,0 +1,27 @@
+---
+description: Log substantive agent-made edits to .cursor/change-log.md for continuity
+alwaysApply: true
+---
+
+# Remember changes this agent makes
+
+After **substantive** work (new files, refactors, feature/bugfix edits, config changes—not tiny typo-only fixes unless the user cares), **append** a short entry to **`.cursor/change-log.md`**.
+
+**Entry format** (newest entries at the **top**, after the title block):
+
+```markdown
+## YYYY-MM-DD — one-line summary
+- What changed and why (2–4 bullets max). Mention key paths like `src/...` if helpful.
+```
+
+If **`change-log.md`** is missing, create it with this header:
+
+```markdown
+# Change log (agent)
+
+Dated notes when Cursor agents modify this repo. Newest first.
+```
+
+**Do not log:** dependency installs alone, formatting-only churn, or read-only exploration.
+
+Before larger tasks, **skim the latest section** of `change-log.md` so you don’t contradict recent decisions.

@@ -22,8 +22,6 @@ const TrayPanel: React.FC = () => {
   
   const [isRestarting, setIsRestarting] = useState(false);
 
-
-  // Sync background volume changes from main window
   useEffect(() => {
     const unlisten = listen<number>('volume-sync', (event) => {
       setMasterVolume(event.payload);
@@ -114,7 +112,7 @@ const TrayPanel: React.FC = () => {
       </div>
 
       <div className="tray-footer">
-        <span className="tray-footer-text">CS2 Reactions Engine v4.2.2</span>
+        <span className="tray-footer-text">CS2 Reactions Engine v4.4.1</span>
       </div>
     </div>
   );

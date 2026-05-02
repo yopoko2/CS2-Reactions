@@ -30,9 +30,6 @@ export interface Mapping {
 
 export type AudioMapping = Mapping;
 
-// Legacy GSI event handling model for maximum stability.
-
-
 interface AudioContextType {
   isGsiConnected: boolean;
   isMuted: boolean;
@@ -41,8 +38,8 @@ interface AudioContextType {
   setMapping: React.Dispatch<React.SetStateAction<Mapping>>;
   masterVolume: number;
   setMasterVolume: (v: number) => void;
-  normalizationEnabled: boolean; // Keep for internal logic
-  isNormalizationEnabled: boolean; // Backend for App.tsx
+  normalizationEnabled: boolean;
+  isNormalizationEnabled: boolean;
   setIsNormalizationEnabled: (v: boolean) => void;
   audioDynamicsEnabled: boolean;
   setAudioDynamicsEnabled: (v: boolean) => void;
@@ -54,8 +51,7 @@ interface AudioContextType {
   testSound: (eventId: string) => void;
   autoTrimEnabled: boolean;
   setAutoTrimEnabled: (v: boolean) => void;
-  
-  // Missing properties for App.tsx alignment
+
   isCs2Running: boolean;
   cs2Path: string | null;
   setCs2Path: (path: string | null) => void;
@@ -134,7 +130,6 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const requestAudioPermissions = useCallback(async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      // Immediately stop the stream to release the mic
       stream.getTracks().forEach(track => track.stop());
       await refreshDevices();
       return true;
@@ -259,7 +254,6 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     if (!saved) return defaults;
     try {
       const parsed = JSON.parse(saved);
-      // Merge defaults with saved to ensure all catalog events exist
       return { ...defaults, ...parsed };
     } catch {
       return defaults;
@@ -271,11 +265,11 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const activeSourcesRef = useRef<AudioBufferSourceNode[]>([]);
   const scheduledBombNodesRef = useRef<AudioBufferSourceNode[]>([]);
   const lastStateRef = useRef({ 
-    round_kills: 0, round_killhs: 0, deaths: 0, 
+    round_kills: 0, round_killhs: 0, match_kills: 0, deaths: 0, mvps: 0,
     activity: '', round_phase: '', team: '',
-    health: 100
+    health: 100,
+    gsi_identity: ''
   });
-  const lastMvpCountRef = useRef(0);
   const lastBombStateRef = useRef('none');
   const lowHealthFiredRef = useRef(false);
   const firstBloodFiredRef = useRef(false);
@@ -283,6 +277,8 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const heartbeatTimerRef = useRef<number | null>(null);
   const cs2FalseStreakRef = useRef(0);
   const invokeGameFalseStreakRef = useRef(0);
+  /** Mute kill-style sounds while dead or while GSI `player` is another pawn (spectate). Set each GSI tick. */
+  const effectiveMuteDeadRef = useRef(false);
 
   const addDebugLog = useCallback((event: string, details: string) => {
     setDebugLogs(prev => [{
@@ -300,9 +296,8 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       });
       masterGainNodeRef.current = audioContextRef.current.createGain();
       masterGainNodeRef.current.connect(audioContextRef.current.destination);
-      masterGainNodeRef.current.gain.value = isMuted ? 0 : (masterVolume * 0.5); // 50% internal volume attenuation
+      masterGainNodeRef.current.gain.value = isMuted ? 0 : (masterVolume * 0.5); // headroom
 
-      // Apply initial device routing
       if (selectedDeviceId !== 'default' && (audioContextRef.current as any).setSinkId) {
         (audioContextRef.current as any).setSinkId(selectedDeviceId).catch(console.error);
       }
@@ -316,7 +311,6 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const ctx = audioContextRef.current!;
     try {
       const uint8Array = await readFile(path);
-      // We slice to ensure we have a clean ArrayBuffer of the exact size
       const arrayBuffer = uint8Array.buffer.slice(uint8Array.byteOffset, uint8Array.byteOffset + uint8Array.byteLength);
       return await ctx.decodeAudioData(arrayBuffer);
     } catch (err: any) {
@@ -355,11 +349,8 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const playSound = useCallback(async (eventId: string, isTest = false) => {
     if (isMuted && !isTest) return;
-    
-    // Mute While Dead logic
-    const state = lastStateRef.current;
-    const isDead = state.health === 0;
-    if (isDead && muteWhileDead && !isTest && eventId !== 'deaths') {
+
+    if (effectiveMuteDeadRef.current && muteWhileDead && !isTest && eventId !== 'deaths') {
       const isGlobal = ['bomb_planted', 'bomb_10s', 'bomb_5s', 'bomb_defused', 'bomb_exploded', 'round_win', 'round_loss', 'mvp_award', 'match_over', 'round_start'].includes(eventId);
       if (!muteWhileDeadExcludeGlobal || !isGlobal) {
         return;
@@ -450,11 +441,10 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       console.error('Playback Error:', err);
       addDebugLog('AUDIO_ERR', err.message || err.toString());
     }
-  }, [mapping, masterVolume, isMuted, normalizationEnabled, audioDynamicsEnabled, dynamicsIntensity, autoTrimEnabled, autoTrimThreshold, autoTrimMode, addDebugLog]);
+  }, [mapping, masterVolume, isMuted, muteWhileDead, muteWhileDeadExcludeGlobal, normalizationEnabled, audioDynamicsEnabled, dynamicsIntensity, autoTrimEnabled, autoTrimThreshold, autoTrimMode, addDebugLog]);
 
   const scheduleSound = async (eventId: string, delaySeconds: number) => {
-    const isDead = lastStateRef.current.health === 0;
-    if (muteWhileDead && isDead) {
+    if (muteWhileDead && effectiveMuteDeadRef.current) {
       const isGlobal = ['bomb_planted', 'bomb_10s', 'bomb_5s', 'bomb_defused', 'bomb_exploded', 'round_win', 'round_loss', 'mvp_award', 'match_over', 'round_start'].includes(eventId);
       if (!muteWhileDeadExcludeGlobal || !isGlobal) {
         return null;
@@ -564,14 +554,39 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       const round = g.round || {};
       const bomb = g.bomb || round.bomb || {};
 
-      // Update current health in lastStateRef IMMEDIATELY for accurate life-status checks in playSound.
-      // We do this at the top so that sounds triggered in the same payload (like round_start)
-      // correctly recognize the new health status.
-      lastStateRef.current.health = state.health ?? 100;
+      const currMvps = matchStats.mvps ?? 0;
+      const prevMvps = lastStateRef.current.mvps ?? 0;
+      const mvpsStatReset = currMvps < prevMvps;
+      const mvpsIncreased = !mvpsStatReset && currMvps > prevMvps;
 
-      // GSI Event Handler (Legacy Comparison Model)
+      const sid = String((player as any).steamid ?? (player as any).steam_id ?? '').trim();
+      const providerSid = String((g as any).provider?.steamid ?? '').trim();
+      /** Spectated pawn vs client: `player.*` follows POV; `provider.steamid` is always you (needs `provider` in GSI cfg). */
+      const isLocalPawn = !providerSid || !sid || sid === providerSid;
+      const isViewingOtherPawn = Boolean(providerSid && sid && sid !== providerSid);
+      const prevDeaths = lastStateRef.current.deaths;
+      const deathIncreased = (matchStats.deaths ?? 0) > prevDeaths;
+
+      const rawHealth = state.health;
+      const prevHealthSnap = lastStateRef.current.health;
+      let resolvedHealth: number;
+      if (deathIncreased) {
+        resolvedHealth = 0;
+      } else if (typeof rawHealth === 'number' && !Number.isNaN(rawHealth)) {
+        resolvedHealth = rawHealth;
+      } else if (prevHealthSnap <= 0) {
+        resolvedHealth = 0;
+      } else {
+        resolvedHealth = 100;
+      }
+      lastStateRef.current.health = resolvedHealth;
+
+      // Mute: any POV that isn't your living body — spectate others, death tick, or local HP 0. Clears on respawn (local + HP>0) when POV returns to you.
+      effectiveMuteDeadRef.current =
+        isViewingOtherPawn || deathIncreased || (isLocalPawn && resolvedHealth <= 0);
+
       const shouldReset = (round.phase === 'live' && lastStateRef.current.round_phase !== 'live') || 
-                          (matchStats.deaths > lastStateRef.current.deaths) || 
+                          deathIncreased || 
                           (player.activity === 'menu' && lastStateRef.current.activity !== 'menu') ||
                           (player.team !== lastStateRef.current.team);
 
@@ -585,11 +600,31 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         lastBombStateRef.current = 'none'; 
       }
 
-      // 1. Kill & Headshot Detection
-      if (state.round_kills > lastStateRef.current.round_kills) {
-        const isHS = state.round_killhs > lastStateRef.current.round_killhs;
-        
-        // Find Active Weapon
+      const prevSnap = lastStateRef.current;
+      const rk = state.round_kills ?? 0;
+      const mk = matchStats.kills ?? 0;
+      const identityKey = sid || String((player as any).name ?? '').trim();
+      const prevIdentity = prevSnap.gsi_identity || '';
+      const identityChanged = Boolean(identityKey && prevIdentity && identityKey !== prevIdentity);
+      /** First payload: don't diff kills against 0 — avoids a burst when joining on someone's POV. */
+      const identityBaselineOnly = Boolean(identityKey && !prevIdentity);
+
+      let baseRK = prevSnap.round_kills;
+      let baseMK = prevSnap.match_kills;
+      let baseRHS = prevSnap.round_killhs;
+      if (identityChanged || identityBaselineOnly) {
+        baseRK = rk;
+        baseMK = mk;
+        baseRHS = state.round_killhs ?? 0;
+      }
+
+      const roundDelta = rk > baseRK;
+      const matchDelta = mk > baseMK;
+      const killDetected = roundDelta || (matchDelta && rk === baseRK);
+
+      if (killDetected) {
+        const isHS = (state.round_killhs ?? 0) > baseRHS;
+
         let activeWeaponName = '';
         if (player.weapons) {
           const activeWep = Object.values(player.weapons).find((w: any) => w.state === 'active');
@@ -603,7 +638,9 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         };
         const weaponEventId = normalizeId(activeWeaponName);
         
-        const isFirstBlood = !firstBloodFiredRef.current && state.round_kills === 1;
+        const isFirstBlood = !firstBloodFiredRef.current && baseRK === 0 && (
+          rk >= 1 || (rk === 0 && mk === 1 && baseMK === 0 && matchDelta)
+        );
         if (isFirstBlood) { playSound('first_blood'); firstBloodFiredRef.current = true; }
 
         const hasWeaponEvent = weaponEventId && mapping[weaponEventId] && mapping[weaponEventId].sounds.length > 0;
@@ -619,25 +656,27 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }
       }
 
-      // 2. Health & Misc
-      if (state.health <= 25 && state.health > 0 && !lowHealthFiredRef.current) { playSound('low_health'); lowHealthFiredRef.current = true; }
+      if (isLocalPawn && state.health <= 25 && state.health > 0 && !lowHealthFiredRef.current) { playSound('low_health'); lowHealthFiredRef.current = true; }
       if (matchStats.deaths > lastStateRef.current.deaths) playSound('deaths');
       if (round.phase === 'freezetime' && lastStateRef.current.round_phase !== 'freezetime') playSound('round_start');
 
-      // 3. Match/Round End
       if ((player.activity === 'menu' || map.phase === 'gameover') && !isMatchOverProcessedRef.current) {
         if (map.phase === 'gameover') { playSound('match_over'); isMatchOverProcessedRef.current = true; }
       }
       if (round.phase === 'over' && lastStateRef.current.round_phase !== 'over') {
-        const isMvp = matchStats.mvps > lastMvpCountRef.current;
-        if (round.win_team === player.team && !isMatchOverProcessedRef.current) {
-          if (isMvp) { playSound('mvp_award'); if (mapping['mvp_award']?.isLayered) playSound('round_win'); }
-          else playSound('round_win');
-        } else if (!isMatchOverProcessedRef.current) { playSound('round_loss'); }
-        if (isMvp) lastMvpCountRef.current = matchStats.mvps;
+        const wonRound = round.win_team === player.team;
+        if (wonRound && !isMatchOverProcessedRef.current) {
+          if (mvpsIncreased) {
+            playSound('mvp_award');
+            if (mapping['mvp_award']?.isLayered) playSound('round_win');
+          } else {
+            playSound('round_win');
+          }
+        } else if (!isMatchOverProcessedRef.current) {
+          playSound('round_loss');
+        }
       }
 
-      // 4. Bomb Logic simplified
       const bombState = (bomb.state || 'none').toLowerCase();
       const bombCountdown = parseFloat(bomb.countdown || '0');
       
@@ -654,15 +693,17 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         lastBombStateRef.current = bombState;
       }
 
-      // Final State Snapshot
       lastStateRef.current = {
-        round_kills: state.round_kills || 0,
-        round_killhs: state.round_killhs || 0,
+        round_kills: state.round_kills ?? 0,
+        round_killhs: state.round_killhs ?? 0,
+        match_kills: matchStats.kills ?? prevSnap.match_kills,
         deaths: matchStats.deaths || 0,
+        mvps: currMvps,
         activity: player.activity || '',
         round_phase: round.phase || '',
         team: player.team || '',
-        health: state.health ?? 100
+        health: resolvedHealth,
+        gsi_identity: identityKey || prevSnap.gsi_identity
       };
 
       if (shouldReset) {
@@ -683,7 +724,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       unlistenSync.then(u => u());
       if (heartbeatTimerRef.current) window.clearTimeout(heartbeatTimerRef.current);
     };
-  }, [mapping]);
+  }, [mapping, playSound, muteWhileDead, muteWhileDeadExcludeGlobal]);
 
   const testSound = useCallback((eventId: string) => playSound(eventId, true), [playSound]);
 
