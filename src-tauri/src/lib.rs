@@ -395,7 +395,7 @@ pub fn run() {
             .build())
         .plugin(tauri_plugin_notification::init())
         .setup(|app| {
-            println!("[STARTUP] CS2 Reactions v4.4.1 initializing...");
+            println!("[STARTUP] CS2 Reactions v4.4.5 initializing...");
             let handle = app.handle().clone();
             match gsi_server::GsiServer::start(handle.clone()) {
                 Ok((gsi_running, port)) => {

@@ -279,6 +279,13 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const invokeGameFalseStreakRef = useRef(0);
   /** Mute kill-style sounds while dead or while GSI `player` is another pawn (spectate). Set each GSI tick. */
   const effectiveMuteDeadRef = useRef(false);
+  /** Avoid firing local kill events on POV transition frames (respawn/spectate switches). */
+  const localPovStableTicksRef = useRef(0);
+  const lastPovKeyRef = useRef('');
+  /** Track local player's deaths only (never spectated pawn deaths). */
+  const localDeathsRef = useRef<number | null>(null);
+  /** Keep dead mute active after local death until a confident local respawn is observed. */
+  const localDeadLatchedRef = useRef(false);
 
   const addDebugLog = useCallback((event: string, details: string) => {
     setDebugLogs(prev => [{
@@ -552,7 +559,8 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       const matchStats = player.match_stats || {};
       const map = g.map || {};
       const round = g.round || {};
-      const bomb = g.bomb || round.bomb || {};
+      const bombPayload = g.bomb ?? {};
+      const roundBombPayload = round.bomb ?? {};
 
       const currMvps = matchStats.mvps ?? 0;
       const prevMvps = lastStateRef.current.mvps ?? 0;
@@ -561,16 +569,33 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
       const sid = String((player as any).steamid ?? (player as any).steam_id ?? '').trim();
       const providerSid = String((g as any).provider?.steamid ?? '').trim();
+      const normalizeSteamId = (v: string) => v.replace(/\D/g, '');
+      const sidNorm = normalizeSteamId(sid);
+      const providerSidNorm = normalizeSteamId(providerSid);
+      const canCompareIdentity = sidNorm.length >= 16 && providerSidNorm.length >= 16;
       /** Spectated pawn vs client: `player.*` follows POV; `provider.steamid` is always you (needs `provider` in GSI cfg). */
-      const isLocalPawn = !providerSid || !sid || sid === providerSid;
-      const isViewingOtherPawn = Boolean(providerSid && sid && sid !== providerSid);
-      const prevDeaths = lastStateRef.current.deaths;
-      const deathIncreased = (matchStats.deaths ?? 0) > prevDeaths;
+      const isViewingOtherPawn = canCompareIdentity ? sidNorm !== providerSidNorm : false;
+      const isLocalPawn = !isViewingOtherPawn;
+      const currentDeaths = matchStats.deaths ?? 0;
+      let localDeathIncreased = false;
+      if (isLocalPawn) {
+        if (localDeathsRef.current === null) {
+          localDeathsRef.current = currentDeaths;
+        } else if (currentDeaths > localDeathsRef.current) {
+          localDeathIncreased = true;
+          localDeathsRef.current = currentDeaths;
+          localDeadLatchedRef.current = true;
+        } else if (currentDeaths < localDeathsRef.current) {
+          // Match/state reset edge.
+          localDeathsRef.current = currentDeaths;
+          localDeadLatchedRef.current = false;
+        }
+      }
 
       const rawHealth = state.health;
       const prevHealthSnap = lastStateRef.current.health;
       let resolvedHealth: number;
-      if (deathIncreased) {
+      if (localDeathIncreased) {
         resolvedHealth = 0;
       } else if (typeof rawHealth === 'number' && !Number.isNaN(rawHealth)) {
         resolvedHealth = rawHealth;
@@ -581,12 +606,22 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }
       lastStateRef.current.health = resolvedHealth;
 
-      // Mute: any POV that isn't your living body — spectate others, death tick, or local HP 0. Clears on respawn (local + HP>0) when POV returns to you.
+      const localDeathByHealthEdge = isLocalPawn && prevHealthSnap > 0 && resolvedHealth <= 0;
+      if (localDeathByHealthEdge) {
+        localDeadLatchedRef.current = true;
+      }
+
+      const localAliveNow = isLocalPawn && resolvedHealth > 0 && player.activity !== 'menu';
+      if (localAliveNow) {
+        localDeadLatchedRef.current = false;
+      }
+
+      // Mute: spectating other pawn, local death edge, latched dead state, or local HP 0.
       effectiveMuteDeadRef.current =
-        isViewingOtherPawn || deathIncreased || (isLocalPawn && resolvedHealth <= 0);
+        isViewingOtherPawn || localDeathIncreased || localDeadLatchedRef.current || (isLocalPawn && resolvedHealth <= 0);
 
       const shouldReset = (round.phase === 'live' && lastStateRef.current.round_phase !== 'live') || 
-                          deathIncreased || 
+                          localDeathIncreased || 
                           (player.activity === 'menu' && lastStateRef.current.activity !== 'menu') ||
                           (player.team !== lastStateRef.current.team);
 
@@ -609,6 +644,17 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       /** First payload: don't diff kills against 0 — avoids a burst when joining on someone's POV. */
       const identityBaselineOnly = Boolean(identityKey && !prevIdentity);
 
+      const stableIdentity = isLocalPawn
+        ? (providerSid || sid || identityKey || 'local')
+        : (sid || identityKey || 'spectate');
+      const povKey = `${isLocalPawn ? 'local' : 'spectate'}:${stableIdentity}`;
+      if (lastPovKeyRef.current === povKey) {
+        localPovStableTicksRef.current += 1;
+      } else {
+        localPovStableTicksRef.current = 1;
+        lastPovKeyRef.current = povKey;
+      }
+
       let baseRK = prevSnap.round_kills;
       let baseMK = prevSnap.match_kills;
       let baseRHS = prevSnap.round_killhs;
@@ -622,7 +668,13 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       const matchDelta = mk > baseMK;
       const killDetected = roundDelta || (matchDelta && rk === baseRK);
 
-      if (killDetected) {
+      // Keep optional mute logic from breaking base behavior:
+      // if mute-while-dead is OFF, do not apply dead/spectate kill gating.
+      const localKillEventsAllowed =
+        (!muteWhileDead || (!isViewingOtherPawn && resolvedHealth > 0)) &&
+        localPovStableTicksRef.current >= 1;
+
+      if (killDetected && localKillEventsAllowed) {
         const isHS = (state.round_killhs ?? 0) > baseRHS;
 
         let activeWeaponName = '';
@@ -644,7 +696,8 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         if (isFirstBlood) { playSound('first_blood'); firstBloodFiredRef.current = true; }
 
         const hasWeaponEvent = weaponEventId && mapping[weaponEventId] && mapping[weaponEventId].sounds.length > 0;
-        const skipStandardForFB = isFirstBlood && !mapping['first_blood']?.isLayered;
+        const hasFirstBloodEvent = Boolean(mapping['first_blood']?.sounds?.length);
+        const skipStandardForFB = isFirstBlood && hasFirstBloodEvent && !mapping['first_blood']?.isLayered;
         const skipStandardForWeapon = hasWeaponEvent && !mapping[weaponEventId]?.isLayered;
 
         if (hasWeaponEvent) playSound(weaponEventId);
@@ -657,7 +710,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }
 
       if (isLocalPawn && state.health <= 25 && state.health > 0 && !lowHealthFiredRef.current) { playSound('low_health'); lowHealthFiredRef.current = true; }
-      if (matchStats.deaths > lastStateRef.current.deaths) playSound('deaths');
+      if (localDeathIncreased) playSound('deaths');
       if (round.phase === 'freezetime' && lastStateRef.current.round_phase !== 'freezetime') playSound('round_start');
 
       if ((player.activity === 'menu' || map.phase === 'gameover') && !isMatchOverProcessedRef.current) {
@@ -677,8 +730,20 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }
       }
 
-      const bombState = (bomb.state || 'none').toLowerCase();
-      const bombCountdown = parseFloat(bomb.countdown || '0');
+      const bombStateRaw =
+        (typeof bombPayload === 'object' && bombPayload !== null ? (bombPayload as any).state : '') ||
+        (typeof roundBombPayload === 'object' && roundBombPayload !== null ? (roundBombPayload as any).state : '') ||
+        (typeof roundBombPayload === 'string' ? roundBombPayload : '') ||
+        'none';
+      const bombState = String(bombStateRaw).toLowerCase();
+
+      const bombCountdownRaw =
+        (typeof bombPayload === 'object' && bombPayload !== null ? (bombPayload as any).countdown : undefined) ??
+        (typeof roundBombPayload === 'object' && roundBombPayload !== null ? (roundBombPayload as any).countdown : undefined);
+      let bombCountdown = Number.parseFloat(String(bombCountdownRaw ?? '0'));
+      if (!Number.isFinite(bombCountdown)) bombCountdown = 0;
+      // Some GSI payload variants expose planted state but no countdown.
+      if (bombState === 'planted' && bombCountdown <= 0) bombCountdown = 40.0;
       
       if (bombState !== lastBombStateRef.current) {
         cancelScheduledBombSounds();
@@ -697,7 +762,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         round_kills: state.round_kills ?? 0,
         round_killhs: state.round_killhs ?? 0,
         match_kills: matchStats.kills ?? prevSnap.match_kills,
-        deaths: matchStats.deaths || 0,
+        deaths: currentDeaths,
         mvps: currMvps,
         activity: player.activity || '',
         round_phase: round.phase || '',

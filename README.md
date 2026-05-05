@@ -16,7 +16,7 @@ to do that. So I built it!
 
 ## Install
 
-Grab the latest installer from the releases page and run it. Windows Defender may
+Grab the latest installer from the [latest release](https://github.com/yopoko2/CS2-Reactions/releases/latest) and run it. Windows Defender may
 flag it as a false positive caused by the global hotkey hook. Source code is
 available if you want to verify.
 
@@ -39,6 +39,20 @@ before, try **Relink** in settings so the game and the app stay in sync.
 - Available in English, Russian, Portuguese, French, and Simplified Chinese.
   Defaults to your OS language on first launch, override anytime in settings.
 
+## Bundled presets
+
+- **Valorant SFX** (`preset-sfx-valorant.CSreact`) — Valorant SFX pack (headshot ping, kill chain ticks, spike plant/defuse, victory).
+- **Female CS 1.6 voice** (`preset-voice-female-cs16.CSreact`) — classic "sexy voice" killstreak lines many CS 1.6 servers used.
+- **Unreal Tournament announcer** (`preset-voice-unreal-tournament.CSreact`) — UT announcer pack (First Blood, Double Kill, Multi Kill, M-M-M-MONSTER KILL, etc.).
+
+## Expected behavior (not bugs)
+
+| Topic | Details |
+|---|---|
+| **First kill after launch** | Most of the time, the first kill right after starting the app/connecting GSI does not trigger. This comes from startup sync/timing edges in CS2 GSI. |
+| **Reaction timing** | Sound playback is near-real-time but not frame-perfect, because events come from GSI HTTP updates. |
+| **Dead / spectator handling** | Intended behavior is to mute kill-style reactions while you are dead or spectating other players to prevent false triggers. There are still edge cases where this can misfire; this is still being tuned. |
+
 ## Tips
 
 | Topic | Details |
@@ -46,8 +60,6 @@ before, try **Relink** in settings so the game and the app stay in sync.
 | **Adding sounds** | Use **Add sound** on a card, drop audio files onto a card, or drop a **.CSreact** profile anywhere on the window. |
 | **Profiles** | **.CSreact** packs your settings and sound files. Export from the app, share the file, and the other person can import it. |
 | **Order of sounds** | Top to bottom on the card. **Killstreak** mode follows that order. When you add several files at once, they’re sorted A–Z and added under what you already had—reorder anytime by dragging. |
-| **First kill in a round** | Once in a while the first kill of a round may not play a sound. That’s a quirk of what the game reports, not something you misconfigured. |
-| **Mute while dead** | Mutes your kill-style sounds while you’re dead so you don’t get triggers in spectator. Round-wide or match events can still be allowed via the option in settings if you want. |
 
 ## Privacy
 

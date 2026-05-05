@@ -112,7 +112,7 @@ const TrayPanel: React.FC = () => {
       </div>
 
       <div className="tray-footer">
-        <span className="tray-footer-text">CS2 Reactions Engine v4.4.1</span>
+        <span className="tray-footer-text">CS2 Reactions Engine v4.4.5</span>
       </div>
     </div>
   );

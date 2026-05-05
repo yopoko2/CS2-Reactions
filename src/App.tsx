@@ -43,7 +43,7 @@ import { motion, AnimatePresence, Reorder, useDragControls } from 'framer-motion
 import { isPermissionGranted, requestPermission, sendNotification } from '@tauri-apps/plugin-notification';
 
 
-const APP_VERSION = '4.4.1';
+const APP_VERSION = '4.4.5';
 const SUPPORTED_PROFILE_EXTENSIONS = [".CSreact", ".cs2vibe"];
 
 const TacticalIcon: React.FC<{ icon: any, color: string, size: number }> = ({ icon, color, size }) => {

@@ -334,7 +334,7 @@ pub fn export_profile(output_path: &Path, config_json: &str) -> Result<(), Strin
         manifest_version: 2,
         profile_name,
         created_at: Local::now().to_rfc3339(),
-        app_version: "4.4.1".to_string(),
+        app_version: "4.4.5".to_string(),
         sound_count: 0,
         sounds: Vec::new(),
         missing_at_export: Vec::new(),
