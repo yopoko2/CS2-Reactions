@@ -8,18 +8,6 @@ A small tool I built because I always wanted custom sounds playing on kills in
 competitive and killstreak audio in deathmatch, and there was never a simple way
 to do that. So I built it!
 
-## Preview
-
-<p align="center">
-  <img src="public/AppShowcase.png" alt="CS2 Reactions App Preview" />
-</p>
-
-## Demo
-
-<p align="center">
-  <img src="public/HowItWorks.gif" alt="Link CS2, assign sounds, hear them on kills and headshots" />
-</p>
-
 ## Install
 
 Grab the latest installer from the [latest release](https://github.com/yopoko2/CS2-Reactions/releases/latest) and run it. Windows Defender may
@@ -73,6 +61,10 @@ Everything runs locally. GSI sends data to 127.0.0.1 only. No accounts, no
 telemetry, no network requests outside your machine.
 
 ## How it works
+
+<p align="center">
+  <img src="public/HowItWorks.gif" alt="CS2 writes GSI config, app listens on localhost, sounds play on your events" />
+</p>
 
 Counter-Strike 2 can send **Game State Integration (GSI)** updates to your own
 PC over HTTP. This app runs a small listener (it picks the first free port in
