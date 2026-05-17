@@ -14,6 +14,12 @@ to do that. So I built it!
   <img src="public/AppShowcase.png" alt="CS2 Reactions App Preview" />
 </p>
 
+## Demo
+
+<p align="center">
+  <img src="public/HowItWorks.gif" alt="Link CS2, assign sounds, hear them on kills and headshots" />
+</p>
+
 ## Install
 
 Grab the latest installer from the [latest release](https://github.com/yopoko2/CS2-Reactions/releases/latest) and run it. Windows Defender may
@@ -122,3 +128,9 @@ npm run tauri build
 ## License
 
 MIT
+
+---
+
+<sub>Occasional assisted tooling during development.</sub>
+
+<!-- assisted iteration on parts of the ui and docs -->
