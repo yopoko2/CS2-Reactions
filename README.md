@@ -8,6 +8,23 @@ A small tool I built because I always wanted custom sounds playing on kills in
 competitive and killstreak audio in deathmatch, and there was never a simple way
 to do that. So I built it!
 
+## How it works
+
+<p align="center">
+  <img src="public/HowItWorks.gif" alt="CS2 writes GSI config, app listens on localhost, sounds play on your events" />
+</p>
+
+Counter-Strike 2 can send **Game State Integration (GSI)** updates to your own
+PC over HTTP. This app runs a small listener (it picks the first free port in
+the range **27532–27537**), reads those updates, and plays your sounds when the
+state matches an event you configured.
+
+That keeps everything official-side: no reading game memory, no hooking the
+process—only the same kind of data streaming tools have used for years. The
+tradeoff is a bit of delay versus cheats-level hooks, and very occasionally the
+game omits or delays a stat this app cares about. The only file written inside
+CS2 is the GSI config in `game\csgo\cfg\`.
+
 ## Install
 
 Grab the latest installer from the [latest release](https://github.com/yopoko2/CS2-Reactions/releases/latest) and run it. Windows Defender may
@@ -59,23 +76,6 @@ before, try **Relink** in settings so the game and the app stay in sync.
 
 Everything runs locally. GSI sends data to 127.0.0.1 only. No accounts, no
 telemetry, no network requests outside your machine.
-
-## How it works
-
-<p align="center">
-  <img src="public/HowItWorks.gif" alt="CS2 writes GSI config, app listens on localhost, sounds play on your events" />
-</p>
-
-Counter-Strike 2 can send **Game State Integration (GSI)** updates to your own
-PC over HTTP. This app runs a small listener (it picks the first free port in
-the range **27532–27537**), reads those updates, and plays your sounds when the
-state matches an event you configured.
-
-That keeps everything official-side: no reading game memory, no hooking the
-process—only the same kind of data streaming tools have used for years. The
-tradeoff is a bit of delay versus cheats-level hooks, and very occasionally the
-game omits or delays a stat this app cares about. The only file written inside
-CS2 is the GSI config in `game\csgo\cfg\`.
 
 ## Files
 
